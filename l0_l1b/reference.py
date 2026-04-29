@@ -127,9 +127,14 @@ class PipeManager:
 
         # paths
         self.local_root = Path(local_root)
+        self.obs_path = self.local_root / f'{self.obs_id}_l0.fits'
         self.dark_path = self.local_root / f'{self.dark_id}_l0.fits'
         self.obs_flat_path = self.local_root / f'{self.obs_flat_id}_ff.fits'
         self.flag_path = self.local_root / f'{self.flag_id}_bde.fits'
+        if self.mode.upper() == 'T':
+            self.lab_flat_path = CAL_DIR / 'lab_flat_field_target.fits'
+        elif self.mode.upper() == 'G':
+            self.lab_flat_path = CAL_DIR / 'lab_flat_field_global.fits'
 
         # calibration vals dependant on obs type
         # TODO: looking at the flats for target makes it seem like they

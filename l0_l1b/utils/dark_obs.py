@@ -24,10 +24,9 @@ def make_dark_signal_image(
         and med are both good for dark signal subtraction, std and max for
         detecting bad detector elements.
     """
+    from .loader import load_fits_into_frame
 
-    with fits.open(dark_path) as hdul:
-        dark_obs_data = hdul[0].data
-
+    dark_obs_data = load_fits_into_frame(dark_path)
     # check everything looks normal (it should)
     # row = frames = detector pov etc
     bands, lines, cols = dark_obs_data.shape
@@ -40,20 +39,16 @@ def make_dark_signal_image(
     exc = 2
 
     if dark_method.lower() == 'mean':
-        dark_signal = dark_obs_data.transpose(1, 0, 2)[exc:-exc, :, :].mean(
-            axis=0)
+        dark_signal = dark_obs_data[exc:-exc, :, :].mean(axis=0)
     elif dark_method.lower() == 'median':
-        dark_signal = np.median(dark_obs_data.transpose(1, 0, 2)
-                                [exc:-exc, :, :], axis=0)
+        dark_signal = np.median(dark_obs_data[exc:-exc, :, :], axis=0)
     elif dark_method.lower() == 'std':
-        dark_signal = np.std(dark_obs_data.transpose(1, 0, 2)
-                             [exc:-exc, :, :], axis=0)
+        dark_signal = np.std(dark_obs_data[exc:-exc, :, :], axis=0)
     elif dark_method.lower() == 'max':
-        dark_signal = np.max(dark_obs_data.transpose(1, 0, 2)
-                             [exc:-exc, :, :], axis=0)
+        dark_signal = np.max(dark_obs_data[exc:-exc, :, :], axis=0)
     else:
         # IDK why we would use this yet
-        return dark_obs_data.transpose(1, 0, 2)
+        return dark_obs_data
 
     if dark_cols is not None:
         # set avg for dark cols to 0 to preserve observation dark signal

@@ -39,7 +39,7 @@ def filter_seam_interpolation(obs_data: np.ndarray, channels: list):
     return obs_data
 
 
-def bad_detector_element_correction(dss_image: np.ndarray, bde_path: Path):
+def bad_detector_element_correction(obs_data: np.ndarray, bde_path: Path):
     """
     Elements are flagged 0-5 in these fits files. Values 1-4 seem to indicate
     things that are "flagged", 1 being the lowest level and 4 the highest. I
@@ -54,10 +54,9 @@ def bad_detector_element_correction(dss_image: np.ndarray, bde_path: Path):
     but should only matter for the tap columns we interpolate across in the
     spatial direction in a later step.
     """
-    from astropy.io import fits
+    from .loader import load_fits_into_frame
 
-    with fits.open(bde_path) as hdul:
-        bde_map = hdul[0].data
+    bde_map = load_fits_into_frame(bde_path)
 
     bad_mask = bde_map != 0
     n_rows, n_cols = bad_mask.shape  # 86 x 320 for global mode
@@ -115,13 +114,13 @@ def bad_detector_element_correction(dss_image: np.ndarray, bde_path: Path):
         btr = bottom_rows[both]
         w = t[both]
 
-        top_vals = dss_image[:, tr, bc].astype(np.float32)
-        bot_vals = dss_image[:, btr, bc].astype(np.float32)
+        top_vals = obs_data[:, tr, bc].astype(np.float32)
+        bot_vals = obs_data[:, btr, bc].astype(np.float32)
 
         interp = top_vals + w[np.newaxis, :] * (bot_vals - top_vals)
         # apply to all frames, should we round differently or leave as a
         # float? IDK.
-        dss_image[:, br, bc] = np.round(interp).astype(dss_image.dtype)
+        obs_data[:, br, bc] = np.round(interp).astype(obs_data.dtype)
 
     # use only valid neighbors value for pixels who only have a top or bottom
     # neighbor (basically just at the edges)
@@ -130,13 +129,13 @@ def bad_detector_element_correction(dss_image: np.ndarray, bde_path: Path):
         bc = bad_cols[top_only]
         tr = top_rows[top_only]
         # apply to all frames
-        dss_image[:, br, bc] = dss_image[:, tr, bc]
+        obs_data[:, br, bc] = obs_data[:, tr, bc]
 
     if bottom_only.any():
         br = bad_rows[bottom_only]
         bc = bad_cols[bottom_only]
         btr = bottom_rows[bottom_only]
         # apply to all frames
-        dss_image[:, br, bc] = dss_image[:, btr, bc]
+        obs_data[:, br, bc] = obs_data[:, btr, bc]
 
-    return dss_image
+    return obs_data

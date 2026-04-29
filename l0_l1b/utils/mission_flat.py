@@ -1,5 +1,6 @@
 from pathlib import Path
 import numpy as np
+from typing import Optional
 
 
 def load_flats(flat_path: Path):
@@ -14,6 +15,26 @@ def load_flats(flat_path: Path):
     return flat
 
 
+def apply_flat(
+        obs_data: np.ndarray,
+        flat_path: Path,
+        flag_path: Optional[Path] = None
+):
+    """
+    Load and multiple flat by image. Modify flat for flagged elements
+    in the BDE if flag_path is given.
+    """
+
+    if flag_path is None:
+        flat = load_flats(flat_path)
+    else:
+        flat = fix_flagged_in_lab_flat(
+            flat_path,
+            flag_path
+        )
+    return obs_data * flat
+
+
 def fix_flagged_in_lab_flat(flat_path: Path, bde_path: Path):
     """
     Use mission interpolation method for BDE (flag) pixels on the DSS image to
@@ -25,11 +46,9 @@ def fix_flagged_in_lab_flat(flat_path: Path, bde_path: Path):
     no longer work because those used the original lab flat, which I don't
     think they modified in this way.
     """
-    from astropy.io import fits
-    from mission_bde import bad_detector_element_correction
+    from .mission_bde import bad_detector_element_correction
 
-    with fits.open(flat_path) as hdul:
-        flat = hdul[0].data
+    flat = load_flats(flat_path)
 
     mod_flat = bad_detector_element_correction(flat, bde_path)
 

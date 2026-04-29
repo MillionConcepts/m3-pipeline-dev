@@ -4,8 +4,8 @@ import numpy as np
 def electronic_panel_ghost_correction(
         obs_data: np.ndarray,
         l0_samples: int,
-        dark_cols: list,
         ghost_correction: float,
+        dark_cols: str = None,
 ):
     """
     During readout from the 6604a detector array, small 'ghosts' occur in the
@@ -24,9 +24,9 @@ def electronic_panel_ghost_correction(
     In the list of corrections in the DPSIS this comes after interpolation
     of 'bad' elements, so right now the ghosts of those are not
     """
+    if dark_cols is None:
+        dark_cols = []
 
-    # .0048 is from DPSIS for M3, determined based on lab & on-orbit
-    # measurements
     panel_width = l0_samples // 4  # 80 for 320 etc
 
     obs_data = obs_data.astype(np.float32)
@@ -34,7 +34,7 @@ def electronic_panel_ghost_correction(
 
     # don't use dark vals for correction bc they aren't dark subtracted
     # this is a bekah design decision we could change
-    frame[:, :, list(dark_cols)] = 0
+    frame[:, :, dark_cols] = 0
 
     # sum the 4 panels
     frame_panels = frame.reshape(obs_data.shape[0], obs_data.shape[1], 4,
