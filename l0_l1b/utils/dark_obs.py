@@ -71,6 +71,9 @@ def basic_dark_pedestal_correction(
     Simple dark pedestal estimation. In the HVM3 code they use median of
     dark cols per frame and subtract that from the same frame.
 
+    For this to work, the dark cols must be dark subtracted in the DSS image.
+    Otherwise, they will be huge numbers that get subtracted.
+
     If the median offset is negative, then it's additive to the image.
 
     This is adding a single scalar value to the whole image, so loses the
@@ -94,18 +97,30 @@ def experimental_dark_pedestal_correction(
 ) -> np.ndarray:
     """
     Compute the ratio between the dark signal image and the dark cols of the
-    observation DSS image per channel per frame. Multiple the dark signal
+    observation DSS image per channel per frame. Multiply the dark signal
     channel by that ratio and add to the corresponding channel of the image.
     The idea is to preserve the 'pattern' of the dark signal image instead of
     applying a single scalar offset to a whole frame.
+
+    For this to work, the dark cols can't be dark subtracted in the DSS image.
+    Otherwise, they will be small negative numbers.
 
     Args:
         obs_image: DSS obs image array.
         dark_cols: Columns used for estimating dark signal.
         dark_signal: Median or mean dark signal observation.
     """
+    if dark_cols is None:
+        # don't do this
+        return obs_image
 
+    for frame in range(obs_image.shape[0]):
+        for channel in range(obs_image.shape[1]):
+            ratio = np.median(obs_image[frame, channel, dark_cols]) / \
+                    np.median(dark_signal[channel, dark_cols])
 
+            offset = (1 - ratio) * dark_signal[channel, :]
 
+            obs_image[frame, channel, :] += offset
 
     return obs_image
