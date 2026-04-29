@@ -143,7 +143,9 @@ class PipeManager:
             self.l1b_samples = 608
             self.l1b_channels = 256
             self.omitted_channels = [0, 1, 2, 3]
-            self.dark_cols = [0, 1, 2, 3, 4, 5, 6, 7, 636, 637, 638, 639]
+            # you might argue 0 belongs in dark cols, but it is also a readout
+            # column so behaves strangely
+            self.dark_cols = [1, 2, 3, 4, 5, 6, 7, 636, 637, 638, 639]
             # 9 - 15 in DPSIS
             self.vignetted_cols_left = [8, 9, 10, 11, 12, 13, 14]
             # 628 - 636 in DPSIS
@@ -160,7 +162,7 @@ class PipeManager:
             self.l1b_samples = 304
             self.l1b_channels = 85
             self.omitted_channels = [0]
-            self.dark_cols = [0, 1, 2, 3, 318, 319]
+            self.dark_cols = [1, 2, 3, 318, 319]
             # the vignetted cols for global are not listed explicitly
             # in the DPSIS
             self.vignetted_cols_left = [4, 5, 6, 7]
