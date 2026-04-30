@@ -24,7 +24,7 @@ def run_pipe(
            verbose: Give me all the info or don't.
     """
 
-    obs_warn, obs_error, metadata = check_observation(obs_id, local_root)
+    obs_warn, obs_error, metadata = check_observation(obs_id)
     if verbose and len(obs_warn) > 0:
         print("\n".join(obs_warn))
     if len(obs_error) > 0:
@@ -37,6 +37,7 @@ def run_pipe(
         metadata=metadata,
         local_root=local_root,
         save_steps=save_steps,
+        verbose=verbose,
     )
 
     if pipe_version == 'mission':
@@ -60,6 +61,8 @@ def run_mission_pipeline(moonager: PipeManager):
 
     obs_image = load_fits_into_frame(moonager.obs_path)
 
+    if moonager.verbose:
+        print("Subtracting dark signal.")
     # (1) Dark Signal Subtraction
     obs_image -= make_dark_signal_image(
         dark_path=moonager.dark_path,
@@ -67,24 +70,32 @@ def run_mission_pipeline(moonager: PipeManager):
     )
 
     # (2) Bad Detector Element Correction (Flag)
+    if moonager.verbose:
+        print("Running flagged pixel correction.")
     obs_image = bad_detector_element_correction(
         obs_data=obs_image,
         bde_path=moonager.flag_path,
     )
 
     # (3) Detector Tap Interpolation
+    if moonager.verbose:
+        print("Interpolating tap cols.")
     obs_image = detector_array_tap_interpolation(
         obs_data=obs_image,
         cols=moonager.read_out_cols
     )
 
     # (4) Filter Seam Interpolation
+    if moonager.verbose:
+        print("Interpolating filter seams.")
     obs_image = filter_seam_interpolation(
         obs_data=obs_image,
         channels=moonager.filter_seam_rows
     )
 
     # (5) Electronic Ghost Correction
+    if moonager.verbose:
+        print("Running electronic ghost correction.")
     obs_image = electronic_panel_ghost_correction(
         obs_data=obs_image,
         l0_samples=moonager.l0_samples,
@@ -92,6 +103,8 @@ def run_mission_pipeline(moonager: PipeManager):
     )
 
     # (6) Dark Pedestal Shift Correction
+    if moonager.verbose:
+        print("Running dark pedestal shift correction.")
     obs_image = basic_dark_pedestal_correction(
         obs_image=obs_image,
         dark_cols=moonager.dark_cols,
@@ -100,17 +113,21 @@ def run_mission_pipeline(moonager: PipeManager):
     # (7) Scattered Light Correction
     # not implemented
 
-    # (8) Lab Flat Correction
-    obs_image = apply_flat(
-        obs_data=obs_image,
-        flat_path=moonager.lab_flat_path,
-    )
-
-    # (9) Imaging-based Flat Correction
-    obs_image = apply_flat(
-        obs_data=obs_image,
-        flat_path=moonager.obs_flat_path,
-    )
+    # # (8) Lab Flat Correction
+    # if moonager.verbose:
+    #     print("Applying lab flat.")
+    # obs_image = apply_flat(
+    #     obs_data=obs_image,
+    #     flat_path=moonager.lab_flat_path,
+    # )
+    #
+    # # (9) Imaging-based Flat Correction
+    # if moonager.verbose:
+    #     print("Applying observation-level flat.")
+    # obs_image = apply_flat(
+    #     obs_data=obs_image,
+    #     flat_path=moonager.obs_flat_path,
+    # )
 
     # (10) Radiometric Calibration
     # not implemented
@@ -126,7 +143,7 @@ def run_mission_pipeline(moonager: PipeManager):
 
 def run_new_pipeline(moonager: PipeManager):
     """
-    Million Concepts interpretation of the DPSIS with creative liberties.
+    DPSIS with creative liberties.
     """
     from l0_l1b.utils.loader import load_fits_into_frame
     from l0_l1b.utils.dark_obs import make_dark_signal_image, \

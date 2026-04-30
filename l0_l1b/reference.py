@@ -1,10 +1,10 @@
 import pandas as pd
 from pathlib import Path
-
+from typing import Optional
 from l0_l1b import CAL_DIR
 
 
-def pull_metadata(obs_id: str, cal_dir: str = None) -> pd.DataFrame:
+def pull_metadata(obs_id: str, cal_dir: Optional[str] = None) -> dict:
     """
     Read metadata scraped from L1B RDN HDRs for the eclipse + some quality
     checks done by hand on flag maps and darks.
@@ -23,10 +23,10 @@ def pull_metadata(obs_id: str, cal_dir: str = None) -> pd.DataFrame:
         metadata = metadata.loc[
             metadata['version'].str.extract(r'(\d+)')[0].astype(int).idxmax()]
 
-    return metadata
+    return metadata.iloc[0].to_dict()
 
 
-def check_observation(obs_id: str, local_root: str):
+def check_observation(obs_id: str, local_root: Optional[str] = None):
     """
     Check that the input observation string matches the expected format & load
     info we have on it from the latest version of its L1B files
@@ -50,6 +50,7 @@ def check_observation(obs_id: str, local_root: str):
     obs_id_pattern = r'^m3[gt]\d{8}t\d{6}$'
     if not bool(re.match(obs_id_pattern, obs_id, re.IGNORECASE)):
         obs_error.append(f"This is not a valid obs ID: {obs_id}")
+        return obs_warn, obs_error, {}
 
     metadata = pull_metadata(obs_id, local_root)
 
@@ -107,8 +108,9 @@ class PipeManager:
     def __init__(self,
                  obs_id: str,
                  local_root: str,
-                 metadata: pd.DataFrame,
+                 metadata: dict,
                  save_steps: bool = False,
+                 verbose: bool = True,
                  ):
 
         # obs metadata
@@ -124,6 +126,7 @@ class PipeManager:
 
         # pipeline config
         self.save_steps = save_steps
+        self.verbose = verbose
 
         # paths
         self.local_root = Path(local_root)
@@ -132,9 +135,9 @@ class PipeManager:
         self.obs_flat_path = self.local_root / f'{self.obs_flat_id}_ff.fits'
         self.flag_path = self.local_root / f'{self.flag_id}_bde.fits'
         if self.mode.upper() == 'T':
-            self.lab_flat_path = CAL_DIR / 'lab_flat_field_target.fits'
+            self.lab_flat_path = Path(CAL_DIR) / 'lab_flat_field_target.fits'
         elif self.mode.upper() == 'G':
-            self.lab_flat_path = CAL_DIR / 'lab_flat_field_global.fits'
+            self.lab_flat_path = Path(CAL_DIR) / 'lab_flat_field_global.fits'
 
         # calibration vals dependant on obs type
         # TODO: looking at the flats for target makes it seem like they

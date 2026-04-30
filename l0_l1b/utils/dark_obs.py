@@ -1,5 +1,4 @@
 import numpy as np
-from astropy.io import fits
 from pathlib import Path
 from typing import Literal
 
@@ -55,7 +54,7 @@ def make_dark_signal_image(
         # values for later steps.
         dark_signal[:, dark_cols] = 0
 
-    return dark_signal
+    return dark_signal.astype(np.float32)
 
 
 def basic_dark_pedestal_correction(
@@ -64,23 +63,31 @@ def basic_dark_pedestal_correction(
 ) -> np.ndarray:
     """
     Simple dark pedestal estimation. In the HVM3 code they use median of
-    dark cols per frame and subtract that from the same frame.
+    dark cols per frame and subtract that from the same frame. In the DPSIS
+    they say they use illumination levels to determine the pedestal offset--
+    we're not doing that here. Maybe we should in the future!
 
     For this to work, the dark cols must be dark subtracted in the DSS image.
     Otherwise, they will be huge numbers that get subtracted.
 
     If the median offset is negative, then it's additive to the image.
 
-    This is adding a single scalar value to the whole image, so loses the
+    This is adding a single scalar value per channel, so loses the columnar
     'pattern' of the dark.
+
+    Args:
+        obs_image: Obs image data, dark subtracted.
+        dark_cols: Columns used for estimating dark signal during an
+            observation (they receive no light).
     """
     if dark_cols is None:
         # don't do this
         return obs_image
 
-    pedestal = np.median(obs_image[:, :, dark_cols], axis=0)
+    pedestal = np.median(obs_image[:, :, dark_cols], axis=(0, 2)).astype(
+        np.float32)
 
-    obs_image = obs_image - pedestal[np.newaxis, :, :]
+    obs_image = obs_image - pedestal[np.newaxis, :, np.newaxis]
 
     return obs_image
 
@@ -101,7 +108,7 @@ def experimental_dark_pedestal_correction(
     Otherwise, they will be small negative numbers.
 
     Args:
-        obs_image: DSS obs image array.
+        obs_image: DSS obs image array with dark cols not dark subtracted.
         dark_cols: Columns used for estimating dark signal.
         dark_signal: Median or mean dark signal observation.
     """
