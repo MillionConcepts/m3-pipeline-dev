@@ -94,7 +94,7 @@ def basic_dark_pedestal_correction(
 
 def experimental_dark_pedestal_correction(
         obs_image: np.ndarray,
-        dark_signal: np.ndarray,
+        dark_path: Path,
         dark_cols: list = None,
 ) -> np.ndarray:
     """
@@ -109,20 +109,31 @@ def experimental_dark_pedestal_correction(
 
     Args:
         obs_image: DSS obs image array with dark cols not dark subtracted.
+        dark_path: We reload dark signal obs without calculating dark signal
+        image for DSS.
         dark_cols: Columns used for estimating dark signal.
-        dark_signal: Median or mean dark signal observation.
     """
+    from .loader import load_fits_into_frame
+
     if dark_cols is None:
         # don't do this
         return obs_image
 
+    # reload dark without setting dark cols to 0 & compress into one frame
+    # (median of all but first 2 and last 2 frames)
+    dark_signal = load_fits_into_frame(dark_path)
+    exc = 2
+    dark_signal = np.median(dark_signal[exc:-exc, :, :], axis=0)
+
     for frame in range(obs_image.shape[0]):
         for channel in range(obs_image.shape[1]):
             ratio = np.median(obs_image[frame, channel, dark_cols]) / \
-                    np.median(dark_signal[channel, dark_cols])
+                np.median(dark_signal[channel, dark_cols])
 
-            offset = (1 - ratio) * dark_signal[channel, :]
-
+            if np.isfinite(ratio):
+                offset = (1 - ratio) * dark_signal[channel, :]
+            else:
+                offset = dark_signal[channel, :]
             obs_image[frame, channel, :] += offset
 
     return obs_image

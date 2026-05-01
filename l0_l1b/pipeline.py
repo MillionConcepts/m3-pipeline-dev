@@ -113,21 +113,21 @@ def run_mission_pipeline(moonager: PipeManager):
     # (7) Scattered Light Correction
     # not implemented
 
-    # # (8) Lab Flat Correction
-    # if moonager.verbose:
-    #     print("Applying lab flat.")
-    # obs_image = apply_flat(
-    #     obs_data=obs_image,
-    #     flat_path=moonager.lab_flat_path,
-    # )
-    #
-    # # (9) Imaging-based Flat Correction
-    # if moonager.verbose:
-    #     print("Applying observation-level flat.")
-    # obs_image = apply_flat(
-    #     obs_data=obs_image,
-    #     flat_path=moonager.obs_flat_path,
-    # )
+    # (8) Lab Flat Correction
+    if moonager.verbose:
+        print("Applying lab flat.")
+    obs_image = apply_flat(
+        obs_data=obs_image,
+        flat_path=moonager.lab_flat_path,
+    )
+
+    # (9) Imaging-based Flat Correction
+    if moonager.verbose:
+        print("Applying observation-level flat.")
+    obs_image = apply_flat(
+        obs_data=obs_image,
+        flat_path=moonager.obs_flat_path,
+    )
 
     # (10) Radiometric Calibration
     # not implemented
@@ -168,7 +168,7 @@ def run_new_pipeline(moonager: PipeManager):
     # Dark Pedestal Shift Correction
     obs_image = experimental_dark_pedestal_correction(
         obs_image=obs_image,
-        dark_signal=dark_signal_image,
+        dark_path=moonager.dark_path,
         dark_cols=moonager.dark_cols,
     )
 
@@ -195,11 +195,11 @@ def run_new_pipeline(moonager: PipeManager):
     # Scattered Light Correction
     # not implemented
 
-    # Lab Flat Correction
-    obs_image = apply_flat(
-        obs_data=obs_image,
-        flat_path=moonager.lab_flat_path,
-    )
+    # # Lab Flat Correction
+    # obs_image = apply_flat(
+    #     obs_data=obs_image,
+    #     flat_path=moonager.lab_flat_path,
+    # )
 
     # No lab based flat because we modified the lab flat?
 
