@@ -51,6 +51,7 @@ def run_mission_pipeline(moonager: PipeManager):
     """
     Pipeline based on an originalist reading of the DPSIS.
     """
+    import numpy as np
     from l0_l1b.utils.loader import load_fits_into_frame
     from l0_l1b.utils.dark_obs import make_dark_signal_image, \
         basic_dark_pedestal_correction
@@ -58,6 +59,8 @@ def run_mission_pipeline(moonager: PipeManager):
     from l0_l1b.utils.mission_bde import bad_detector_element_correction, \
         detector_array_tap_interpolation, filter_seam_interpolation
     from l0_l1b.utils.mission_flat import apply_flat
+    from l0_l1b.utils.smooth_shape import load_ssc_factors
+    from l0_l1b.utils.radiometric_calibration import load_rdn_cal_factors
 
     obs_image = load_fits_into_frame(moonager.obs_path)
 
@@ -131,9 +134,13 @@ def run_mission_pipeline(moonager: PipeManager):
 
     # (10) Radiometric Calibration
     # not implemented
+    rdn_cal = load_rdn_cal_factors(moonager.rdn_cal_path)
+    obs_image = obs_image * rdn_cal[np.newaxis, :, np.newaxis]
 
     # (11) Smooth Shape Correction
-    # not implemented
+    # We will need to drop a row of the image before this step.
+    ssc_factors = load_ssc_factors(moonager.ssc_path)
+    obs_image = obs_image * ssc_factors[np.newaxis, :, np.newaxis]
 
     # (12) Ray tracing / location
     # not implemented
@@ -196,10 +203,10 @@ def run_new_pipeline(moonager: PipeManager):
     # not implemented
 
     # # Lab Flat Correction
-    # obs_image = apply_flat(
-    #     obs_data=obs_image,
-    #     flat_path=moonager.lab_flat_path,
-    # )
+    obs_image = apply_flat(
+        obs_data=obs_image,
+        flat_path=moonager.lab_flat_path,
+    )
 
     # No lab based flat because we modified the lab flat?
 
