@@ -134,11 +134,17 @@ class PipeManager:
         self.dark_path = self.local_root / f'{self.dark_id}_l0.fits'
         self.obs_flat_path = self.local_root / f'{self.obs_flat_id}_ff.fits'
         self.flag_path = self.local_root / f'{self.flag_id}_bde.fits'
+        self.ssc_path = self.local_root / f'{self.obs_id}_ssc.txt'
         if self.mode.upper() == 'T':
             self.lab_flat_path = Path(CAL_DIR) / 'lab_flat_field_target.fits'
+            self.rdn_gain_path = Path(CAL_DIR) / 'm3t20070912_rdn_gain.tab'
+            self.rdn_spc_path = Path(CAL_DIR) / 'm3t20070912_rdn_spc.tab'
+            self.rdn_cal_path = Path(CAL_DIR) / 'm3t20081118_rdn_cal.tab'
         elif self.mode.upper() == 'G':
             self.lab_flat_path = Path(CAL_DIR) / 'lab_flat_field_global.fits'
-
+            self.rdn_gain_path = Path(CAL_DIR) / 'm3g20081211_rdn_gain.tab'
+            self.rdn_spc_path = Path(CAL_DIR) / 'm3g20081211_rdn_spc.tab'
+            self.rdn_cal_path = Path(CAL_DIR) / 'm3g20081118_rdn_cal.tab'
         # calibration vals dependant on obs type
         # TODO: looking at the flats for target makes it seem like they
         #  interpolated across more rows than indicated in the DPSIS, so
