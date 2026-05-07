@@ -165,6 +165,9 @@ class PipeManager:
             # 628 - 636 in DPSIS
             self.vignetted_cols_right = [627, 628, 629, 630, 631,
                                          632, 633, 634, 635]
+            # 608 samples after trimming cols
+            self.left_col_cutoff = 17  # inclusive
+            self.right_col_cutoff = 625  # exclusive
             # read out / tap cols are 1, 161, 321, 481 in DPSIS
             self.read_out_cols = [0, 160, 320, 480]
             # filter channels are 41, 42, 116 in DPSIS
@@ -179,8 +182,11 @@ class PipeManager:
             self.dark_cols = [1, 2, 3, 318, 319]
             # the vignetted cols for global are not listed explicitly
             # in the DPSIS
-            self.vignetted_cols_left = [4, 5, 6, 7]
+            self.vignetted_cols_left = [4, 5, 6, 7, 8]
             self.vignetted_cols_right = [313, 314, 315, 316, 317]
+            # 304 samples after trimming cols
+            self.left_col_cutoff = 9  # inclusive
+            self.right_col_cutoff = 313  # exclusive
             self.read_out_cols = [0, 80, 160, 240]
             # 13 and 50 in DPSIS
             self.filter_seam_rows = [12, 49]

@@ -63,6 +63,7 @@ def run_mission_pipeline(moonager: PipeManager):
     from l0_l1b.utils.radiometric_calibration import load_rdn_cal_factors
 
     obs_image = load_fits_into_frame(moonager.obs_path)
+    # obs_image shape = (frames / lines, channels / bands, samples / columns)
 
     if moonager.verbose:
         print("Subtracting dark signal.")
@@ -132,13 +133,21 @@ def run_mission_pipeline(moonager: PipeManager):
         flat_path=moonager.obs_flat_path,
     )
 
+    # Drop first channel(s) and trim vignetted and dark columns
+    # obs_image shape = (frames / lines, channels / bands, samples / columns)
+    if moonager.verbose:
+        print("Trimming image samples and channels to L1B size.")
+    obs_image = obs_image[
+                :,
+                np.max(moonager.omitted_channels) + 1:,
+                moonager.left_col_cutoff:moonager.right_col_cutoff
+                ]
+
     # (10) Radiometric Calibration
-    # not implemented
     rdn_cal = load_rdn_cal_factors(moonager.rdn_cal_path)
     obs_image = obs_image * rdn_cal[np.newaxis, :, np.newaxis]
 
     # (11) Smooth Shape Correction
-    # We will need to drop a row of the image before this step.
     ssc_factors = load_ssc_factors(moonager.ssc_path)
     obs_image = obs_image * ssc_factors[np.newaxis, :, np.newaxis]
 
