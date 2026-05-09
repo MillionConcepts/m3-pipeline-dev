@@ -22,7 +22,7 @@ def pull_metadata(obs_id: str, cal_dir: Optional[str] = None) -> dict:
     if len(metadata) > 1:
         metadata = metadata.loc[
             metadata['version'].str.extract(r'(\d+)')[0].astype(int).idxmax()]
-
+        return metadata.to_dict()
     return metadata.iloc[0].to_dict()
 
 
