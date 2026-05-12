@@ -53,6 +53,8 @@ def bad_detector_element_correction(obs_data: np.ndarray, bde_path: Path):
     good pixels in a column, right now we don't do anything. This could change,
     but should only matter for the tap columns we interpolate across in the
     spatial direction in a later step.
+
+    Supports 3D arrays (frames, channels, cols) and 2D arrays (channels, cols).
     """
     from .loader import load_fits_into_frame
 
@@ -107,6 +109,8 @@ def bad_detector_element_correction(obs_data: np.ndarray, bde_path: Path):
     t = np.where(both, (bad_rows - top_rows) / denominator, 0.0).astype(
         np.float32)
 
+    is_3d = obs_data.ndim == 3
+
     if both.any():
         br = bad_rows[both]
         bc = bad_cols[both]
@@ -114,28 +118,33 @@ def bad_detector_element_correction(obs_data: np.ndarray, bde_path: Path):
         btr = bottom_rows[both]
         w = t[both]
 
-        top_vals = obs_data[:, tr, bc].astype(np.float32)
-        bot_vals = obs_data[:, btr, bc].astype(np.float32)
+        if is_3d:
+            top_vals = obs_data[:, tr, bc].astype(np.float32)
+            bot_vals = obs_data[:, btr, bc].astype(np.float32)
+            interp = top_vals + w[np.newaxis, :] * (bot_vals - top_vals)
+            obs_data[:, br, bc] = np.round(interp).astype(obs_data.dtype)
+        else:
+            top_vals = obs_data[tr, bc].astype(np.float32)
+            bot_vals = obs_data[btr, bc].astype(np.float32)
+            interp = top_vals + w * (bot_vals - top_vals)
+            obs_data[br, bc] = np.round(interp).astype(obs_data.dtype)
 
-        interp = top_vals + w[np.newaxis, :] * (bot_vals - top_vals)
-        # apply to all frames, should we round differently or leave as a
-        # float? IDK.
-        obs_data[:, br, bc] = np.round(interp).astype(obs_data.dtype)
-
-    # use only valid neighbors value for pixels who only have a top or bottom
-    # neighbor (basically just at the edges)
     if top_only.any():
         br = bad_rows[top_only]
         bc = bad_cols[top_only]
         tr = top_rows[top_only]
-        # apply to all frames
-        obs_data[:, br, bc] = obs_data[:, tr, bc]
+        if is_3d:
+            obs_data[:, br, bc] = obs_data[:, tr, bc]
+        else:
+            obs_data[br, bc] = obs_data[tr, bc]
 
     if bottom_only.any():
         br = bad_rows[bottom_only]
         bc = bad_cols[bottom_only]
         btr = bottom_rows[bottom_only]
-        # apply to all frames
-        obs_data[:, br, bc] = obs_data[:, btr, bc]
+        if is_3d:
+            obs_data[:, br, bc] = obs_data[:, btr, bc]
+        else:
+            obs_data[br, bc] = obs_data[btr, bc]
 
     return obs_data

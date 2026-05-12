@@ -117,12 +117,13 @@ def run_mission_pipeline(moonager: PipeManager):
     # (7) Scattered Light Correction
     # not implemented
 
-    #(8) Lab Flat Correction
+    # (8) Lab Flat Correction
     if moonager.verbose:
         print("Applying lab flat.")
     obs_image = apply_flat(
         obs_data=obs_image,
         flat_path=moonager.lab_flat_path,
+        flag_path=moonager.flag_path
     )
 
     # (9) Imaging-based Flat Correction
@@ -131,6 +132,7 @@ def run_mission_pipeline(moonager: PipeManager):
     obs_image = apply_flat(
         obs_data=obs_image,
         flat_path=moonager.obs_flat_path,
+        flag_path=moonager.flag_path
     )
 
     # (10) Radiometric Calibration

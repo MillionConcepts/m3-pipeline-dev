@@ -32,7 +32,11 @@ def apply_flat(
             flat_path,
             flag_path
         )
-    return obs_data * flat
+    if "lab" in str(flat_path):
+        return obs_data * flat
+    else:
+        #TODO: how do we want to handle divide by 0? mask that part of the flat?
+        return obs_data / flat
 
 
 def fix_flagged_in_lab_flat(flat_path: Path, bde_path: Path):
