@@ -117,39 +117,39 @@ def run_mission_pipeline(moonager: PipeManager):
     # (7) Scattered Light Correction
     # not implemented
 
-    # (8) Lab Flat Correction
-    # if moonager.verbose:
-    #     print("Applying lab flat.")
-    # obs_image = apply_flat(
-    #     obs_data=obs_image,
-    #     flat_path=moonager.lab_flat_path,
-    # )
-    #
-    # # (9) Imaging-based Flat Correction
-    # if moonager.verbose:
-    #     print("Applying observation-level flat.")
-    # obs_image = apply_flat(
-    #     obs_data=obs_image,
-    #     flat_path=moonager.obs_flat_path,
-    # )
-    #
-    # # Drop first channel(s) and trim vignetted and dark columns
-    # # obs_image shape = (frames / lines, channels / bands, samples / columns)
-    # if moonager.verbose:
-    #     print("Trimming image samples and channels to L1B size.")
-    # obs_image = obs_image[
-    #             :,
-    #             np.max(moonager.omitted_channels) + 1:,
-    #             moonager.left_col_cutoff:moonager.right_col_cutoff
-    #             ]
-    #
-    # # (10) Radiometric Calibration
-    # rdn_cal = load_rdn_cal_factors(moonager.rdn_cal_path)
-    # obs_image = obs_image * rdn_cal[np.newaxis, :, np.newaxis]
-    #
-    # # (11) Smooth Shape Correction
-    # ssc_factors = load_ssc_factors(moonager.ssc_path)
-    # obs_image = obs_image * ssc_factors[np.newaxis, :, np.newaxis]
+    #(8) Lab Flat Correction
+    if moonager.verbose:
+        print("Applying lab flat.")
+    obs_image = apply_flat(
+        obs_data=obs_image,
+        flat_path=moonager.lab_flat_path,
+    )
+
+    # (9) Imaging-based Flat Correction
+    if moonager.verbose:
+        print("Applying observation-level flat.")
+    obs_image = apply_flat(
+        obs_data=obs_image,
+        flat_path=moonager.obs_flat_path,
+    )
+
+    # (10) Radiometric Calibration
+    rdn_cal = load_rdn_cal_factors(moonager.rdn_cal_path)
+    obs_image = obs_image * rdn_cal[np.newaxis, :, np.newaxis]
+
+    # Drop first channel(s) and trim vignetted and dark columns
+    # obs_image shape = (frames / lines, channels / bands, samples / columns)
+    if moonager.verbose:
+        print("Trimming image samples and channels to L1B size.")
+    obs_image = obs_image[
+                :,
+                np.max(moonager.omitted_channels) + 1:,
+                moonager.left_col_cutoff:moonager.right_col_cutoff
+                ]
+
+    # (11) Smooth Shape Correction
+    ssc_factors = load_ssc_factors(moonager.ssc_path)
+    obs_image = obs_image * ssc_factors[np.newaxis, :, np.newaxis]
 
     # (12) Ray tracing / location
     # not implemented
