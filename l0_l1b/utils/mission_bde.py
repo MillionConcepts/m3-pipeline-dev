@@ -9,8 +9,12 @@ def detector_array_tap_interpolation(obs_data: np.ndarray, cols: list):
     target and 81, 161, 241 for global mode.
     """
     cols = np.array(cols)
-    obs_data[:, :, cols] = (obs_data[:, :, cols - 1] +
-                            obs_data[:, :, cols + 1]) / 2.0
+    if obs_data.ndim == 3:
+        obs_data[:, :, cols] = (obs_data[:, :, cols - 1] +
+                                obs_data[:, :, cols + 1]) / 2.0
+    else:
+        obs_data[:, cols] = (obs_data[:, cols - 1] +
+                             obs_data[:, cols + 1]) / 2.0
     return obs_data
 
 

@@ -156,6 +156,7 @@ def run_mission_pipeline(moonager: PipeManager):
     # (12) Ray tracing / location
     # not implemented
 
+    #TODO: flip things around to the orientation used in level 2 etc
     return obs_image
 
 
