@@ -95,7 +95,9 @@ def basic_dark_pedestal_correction(
 def experimental_dark_pedestal_correction(
         obs_image: np.ndarray,
         dark_path: Path,
+        bde_path: Path,
         dark_cols: list = None,
+        tap_cols: list = None,
 ) -> np.ndarray:
     """
     Compute the ratio between the dark signal image and the dark cols of the
@@ -114,7 +116,8 @@ def experimental_dark_pedestal_correction(
         dark_cols: Columns used for estimating dark signal.
     """
     from .loader import load_fits_into_frame
-
+    from .mission_bde import bad_detector_element_correction, \
+        detector_array_tap_interpolation
     if dark_cols is None:
         # don't do this
         return obs_image
@@ -124,6 +127,10 @@ def experimental_dark_pedestal_correction(
     dark_signal = load_fits_into_frame(dark_path)
     exc = 2
     dark_signal = np.median(dark_signal[exc:-exc, :, :], axis=0)
+
+    dark_signal = detector_array_tap_interpolation(dark_signal, tap_cols)
+
+    dark_signal = bad_detector_element_correction(dark_signal, bde_path)
 
     for frame in range(obs_image.shape[0]):
         for channel in range(obs_image.shape[1]):
