@@ -131,8 +131,7 @@ def bad_detector_element_correction(obs_data: np.ndarray, bde_path: Path):
             top_vals = obs_data[tr, bc].astype(np.float32)
             bot_vals = obs_data[btr, bc].astype(np.float32)
             interp = top_vals + w * (bot_vals - top_vals)
-            obs_data[br, bc] = np.round(interp).astype(obs_data.dtype)
-
+            obs_data[br, bc] = interp.astype(obs_data.dtype)
     if top_only.any():
         br = bad_rows[top_only]
         bc = bad_cols[top_only]
