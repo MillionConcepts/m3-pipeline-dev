@@ -83,12 +83,9 @@ def basic_dark_pedestal_correction(
     if dark_cols is None:
         # don't do this
         return obs_image
-
-    pedestal = np.median(obs_image[:, :, dark_cols], axis=(0, 2)).astype(
-        np.float32)
-
-    obs_image = obs_image - pedestal[np.newaxis, :, np.newaxis]
-
+    # pedestal for each frame and channel
+    pedestals = np.median(obs_image[:, :, dark_cols], axis=2)
+    obs_image = obs_image - pedestals[:, :, np.newaxis]
     return obs_image
 
 

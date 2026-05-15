@@ -1,6 +1,7 @@
 # M3 Calibration Pipeline for L0 to L1B processing
 
 from typing import Literal
+from astropy.io import fits
 
 from l0_l1b.reference import PipeManager, check_observation
 
@@ -61,6 +62,7 @@ def run_mission_pipeline(moonager: PipeManager):
     from l0_l1b.utils.mission_flat import apply_flat
     from l0_l1b.utils.smooth_shape import load_ssc_factors
     from l0_l1b.utils.radiometric_calibration import load_rdn_cal_factors
+    from l0_l1b.utils.scattered_light import basic_scattered_light_correction
 
     obs_image = load_fits_into_frame(moonager.obs_path)
     # obs_image shape = (frames / lines, channels / bands, samples / columns)
@@ -73,6 +75,12 @@ def run_mission_pipeline(moonager: PipeManager):
         dark_method='mean'
     )
 
+    # fits.writeto(
+    #     f"after_dss.fits",
+    #     obs_image[10000:12000, :, :],
+    #     overwrite=True
+    # )
+
     # (2) Bad Detector Element Correction (Flag)
     if moonager.verbose:
         print("Running flagged pixel correction.")
@@ -80,6 +88,12 @@ def run_mission_pipeline(moonager: PipeManager):
         obs_data=obs_image,
         bde_path=moonager.flag_path,
     )
+
+    # fits.writeto(
+    #     f"after_bde.fits",
+    #     obs_image[10000:12000, :, :],
+    #     overwrite=True
+    # )
 
     # (3) Detector Tap Interpolation
     if moonager.verbose:
@@ -97,6 +111,12 @@ def run_mission_pipeline(moonager: PipeManager):
         channels=moonager.filter_seam_rows
     )
 
+    # fits.writeto(
+    #     f"after_fs.fits",
+    #     obs_image[10000:12000, :, :],
+    #     overwrite=True
+    # )
+
     # (5) Electronic Ghost Correction
     if moonager.verbose:
         print("Running electronic ghost correction.")
@@ -106,6 +126,12 @@ def run_mission_pipeline(moonager: PipeManager):
         ghost_correction=moonager.ghost_correction,
     )
 
+    # fits.writeto(
+    #     f"after_ghost.fits",
+    #     obs_image[10000:12000, :, :],
+    #     overwrite=True
+    # )
+
     # (6) Dark Pedestal Shift Correction
     if moonager.verbose:
         print("Running dark pedestal shift correction.")
@@ -114,8 +140,26 @@ def run_mission_pipeline(moonager: PipeManager):
         dark_cols=moonager.dark_cols,
     )
 
+    # fits.writeto(
+    #     f"after_dp_corr.fits",
+    #     obs_image[10000:12000, :, :],
+    #     overwrite=True
+    # )
+
     # (7) Scattered Light Correction
-    # not implemented
+    if moonager.verbose:
+        print("Applying scattered light correction.")
+    obs_image = basic_scattered_light_correction(
+        obs_image=obs_image,
+        left_cols=moonager.vignetted_cols_left,
+        right_cols=moonager.vignetted_cols_right
+    )
+
+    # fits.writeto(
+    #     f"after_sl_corr.fits",
+    #     obs_image[10000:12000, :, :],
+    #     overwrite=True
+    # )
 
     # (8) Lab Flat Correction
     if moonager.verbose:
@@ -123,8 +167,14 @@ def run_mission_pipeline(moonager: PipeManager):
     obs_image = apply_flat(
         obs_data=obs_image,
         flat_path=moonager.lab_flat_path,
-        flag_path=moonager.flag_path
+        # flag_path=moonager.flag_path
     )
+
+    # fits.writeto(
+    #     f"after_lab_flat.fits",
+    #     obs_image[10000:12000, :, :],
+    #     overwrite=True
+    # )
 
     # (9) Imaging-based Flat Correction
     if moonager.verbose:
@@ -132,12 +182,24 @@ def run_mission_pipeline(moonager: PipeManager):
     obs_image = apply_flat(
         obs_data=obs_image,
         flat_path=moonager.obs_flat_path,
-        flag_path=moonager.flag_path
+        #flag_path=moonager.flag_path
     )
+
+    # fits.writeto(
+    #     f"after_image_flat.fits",
+    #     obs_image[10000:12000, :, :],
+    #     overwrite=True
+    # )
 
     # (10) Radiometric Calibration
     rdn_cal = load_rdn_cal_factors(moonager.rdn_cal_path)
     obs_image = obs_image * rdn_cal[np.newaxis, :, np.newaxis]
+
+    # fits.writeto(
+    #     f"after_rad_cal.fits",
+    #     obs_image[10000:12000, :, :],
+    #     overwrite=True
+    # )
 
     # Drop first channel(s) and trim vignetted and dark columns
     # obs_image shape = (frames / lines, channels / bands, samples / columns)
