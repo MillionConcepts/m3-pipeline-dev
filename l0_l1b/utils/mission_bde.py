@@ -59,6 +59,7 @@ def bad_detector_element_correction(obs_data: np.ndarray, bde_path: Path):
     spatial direction in a later step.
 
     Supports 3D arrays (frames, channels, cols) and 2D arrays (channels, cols).
+    For 3D arrays, correction is applied per-frame using that frame's values.
     """
     from .loader import load_fits_into_frame
 
@@ -109,9 +110,8 @@ def bad_detector_element_correction(obs_data: np.ndarray, bde_path: Path):
     # could interpolate across / spatially
 
     # weights for linear interpolation when there is a top and bottom pixel
-    denominator = np.where(both, bottom_rows - top_rows, 1).astype(np.float32)
-    t = np.where(both, (bad_rows - top_rows) / denominator, 0.0).astype(
-        np.float32)
+    denominator = np.where(both, bottom_rows - top_rows, 1)
+    t = np.where(both, (bad_rows - top_rows) / denominator, 0.0)
 
     is_3d = obs_data.ndim == 3
 
@@ -123,21 +123,25 @@ def bad_detector_element_correction(obs_data: np.ndarray, bde_path: Path):
         w = t[both]
 
         if is_3d:
-            top_vals = obs_data[:, tr, bc].astype(np.float32)
-            bot_vals = obs_data[:, btr, bc].astype(np.float32)
-            interp = top_vals + w[np.newaxis, :] * (bot_vals - top_vals)
-            obs_data[:, br, bc] = np.round(interp).astype(obs_data.dtype)
+            n_frames = obs_data.shape[0]
+            for frame_idx in range(n_frames):
+                top_vals = obs_data[frame_idx, tr, bc]
+                bot_vals = obs_data[frame_idx, btr, bc]
+                interp = top_vals + w * (bot_vals - top_vals)
+                obs_data[frame_idx, br, bc] = interp
         else:
-            top_vals = obs_data[tr, bc].astype(np.float32)
-            bot_vals = obs_data[btr, bc].astype(np.float32)
+            top_vals = obs_data[tr, bc]
+            bot_vals = obs_data[btr, bc]
             interp = top_vals + w * (bot_vals - top_vals)
-            obs_data[br, bc] = interp.astype(obs_data.dtype)
+            obs_data[br, bc] = interp
     if top_only.any():
         br = bad_rows[top_only]
         bc = bad_cols[top_only]
         tr = top_rows[top_only]
         if is_3d:
-            obs_data[:, br, bc] = obs_data[:, tr, bc]
+            n_frames = obs_data.shape[0]
+            for frame_idx in range(n_frames):
+                obs_data[frame_idx, br, bc] = obs_data[frame_idx, tr, bc]
         else:
             obs_data[br, bc] = obs_data[tr, bc]
 
@@ -146,7 +150,9 @@ def bad_detector_element_correction(obs_data: np.ndarray, bde_path: Path):
         bc = bad_cols[bottom_only]
         btr = bottom_rows[bottom_only]
         if is_3d:
-            obs_data[:, br, bc] = obs_data[:, btr, bc]
+            n_frames = obs_data.shape[0]
+            for frame_idx in range(n_frames):
+                obs_data[frame_idx, br, bc] = obs_data[frame_idx, btr, bc]
         else:
             obs_data[br, bc] = obs_data[btr, bc]
 

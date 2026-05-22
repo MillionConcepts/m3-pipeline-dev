@@ -35,7 +35,7 @@ def make_dark_signal_image(
 
     # exclude first and last two frames bc they can be funky. this number
     # could increase tbh but haven't done extensive investigation
-    exc = 2
+    exc = 5
 
     if dark_method.lower() == 'mean':
         dark_signal = dark_obs_data[exc:-exc, :, :].mean(axis=0)
@@ -54,7 +54,7 @@ def make_dark_signal_image(
         # values for later steps.
         dark_signal[:, dark_cols] = 0
 
-    return dark_signal.astype(np.float32)
+    return dark_signal
 
 
 def basic_dark_pedestal_correction(
@@ -70,10 +70,8 @@ def basic_dark_pedestal_correction(
     For this to work, the dark cols must be dark subtracted in the DSS image.
     Otherwise, they will be huge numbers that get subtracted.
 
-    If the median offset is negative, then it's additive to the image.
-
-    This is adding a single scalar value per channel, so loses the columnar
-    'pattern' of the dark.
+    We apply on a line by line (aka frame by frame) basis because that's what
+    the DPSIS did.
 
     Args:
         obs_image: Obs image data, dark subtracted.
@@ -83,9 +81,10 @@ def basic_dark_pedestal_correction(
     if dark_cols is None:
         # don't do this
         return obs_image
-    # pedestal for each frame and channel
-    pedestals = np.median(obs_image[:, :, dark_cols], axis=2)
-    obs_image = obs_image - pedestals[:, :, np.newaxis]
+    # pedestal for each frame
+    pedestals = np.median(obs_image[:, :, dark_cols], axis=(1, 2))
+    obs_image = obs_image - pedestals[:, np.newaxis, np.newaxis]
+
     return obs_image
 
 

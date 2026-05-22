@@ -1,23 +1,23 @@
 from pathlib import Path
+import numpy as np
 
 
-def load_fits_into_frame(obs_path: Path):
+def load_fits_into_frame(obs_path: Path) -> np.ndarray:
     """
     Load the obs data and return it in detector POV / frame view where
     axis 0 is frames / lines.
     """
     from astropy.io import fits
-    import numpy as np
 
     with fits.open(obs_path) as hdul:
         image = hdul[0].data
 
-    if "ff" in obs_path.name or "flat" in obs_path.name:
+    filename = obs_path.name.lower()
+
+    if "ff" in filename or "flat" in filename:
         return image.astype(np.float32)
 
-    if "bde" in obs_path.name:
+    if "bde" in filename:
         return image.astype(np.uint8)
 
-    # TODO: are the images ever flipped relative to the detector frame in
-    #  the spectral direction?
     return image.transpose(1, 0, 2).astype(np.float32)
