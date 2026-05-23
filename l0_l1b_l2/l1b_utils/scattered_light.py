@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def basic_scattered_light_correction(
+def basic_scattered_light_corr(
         obs_image: np.ndarray,
         left_cols: list,
         right_cols: list,

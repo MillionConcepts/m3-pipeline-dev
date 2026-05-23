@@ -50,10 +50,10 @@ def fix_flagged_in_lab_flat(flat_path: Path, bde_path: Path):
     no longer work because those used the original lab flat, which I don't
     think they modified in this way.
     """
-    from .mission_bde import bad_detector_element_correction
+    from .mission_bde import bde_correction
 
     flat = load_flats(flat_path)
 
-    mod_flat = bad_detector_element_correction(flat, bde_path)
+    mod_flat = bde_correction(flat, bde_path)
 
     return mod_flat

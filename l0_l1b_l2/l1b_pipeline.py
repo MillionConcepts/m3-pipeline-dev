@@ -1,102 +1,54 @@
-# M3 Calibration Pipeline for L0 to L1B processing
+# M3 Calibration Pipelines for L0 to L1B processing
 
-from typing import Literal
 from astropy.io import fits
+from l0_l1b_l2.reference import PipeManager
 
-from l0_l1b.reference import PipeManager, check_observation
 
-
-def run_pipe(
-    obs_id: str,
-    pipe_version: Literal['mission', 'new'] = 'mission',
-    local_root: str = "data",
-    save_steps: bool = False,
-    verbose: bool = True,
-):
+def run_l1b_mission_pipeline(moonager: PipeManager):
     """
-       Args:
-           obs_id: Observation ID for the M3 observation, a string beginning
-           with M3.
-           pipe_version: Do we want a mission-faithful processing of the L0
-           data, or a more experimental processing?
-           local_root: Where is the data stored?
-           save_steps: Save intermediate step data as fits files.
-           #TODO: Could make more complicated to save only specific steps.
-           verbose: Give me all the info or don't.
-    """
-
-    obs_warn, obs_error, metadata = check_observation(obs_id)
-    if verbose and len(obs_warn) > 0:
-        print("\n".join(obs_warn))
-    if len(obs_error) > 0:
-        print("\n".join(obs_error))
-        print("Bailing out.")
-        return f"return code: {';'.join(obs_error)}"
-
-    moonager = PipeManager(
-        obs_id=obs_id,
-        metadata=metadata,
-        local_root=local_root,
-        save_steps=save_steps,
-        verbose=verbose,
-    )
-
-    if pipe_version == 'mission':
-        return run_mission_pipeline(moonager)
-
-    elif pipe_version == 'new':
-        return run_new_pipeline(moonager)
-
-
-def run_mission_pipeline(moonager: PipeManager):
-    """
-    Pipeline based on an originalist reading of the DPSIS.
+    L0 to L1B Pipeline based on an originalist reading of the DPSIS.
     """
     import numpy as np
-    from l0_l1b.utils.loader import load_fits_into_frame
-    from l0_l1b.utils.dark_obs import make_dark_signal_image, \
+    from l0_l1b_l2.l1b_utils.loader import load_fits_into_frame
+    from l0_l1b_l2.l1b_utils.dark_obs import make_dark_signal_image, \
         basic_dark_pedestal_correction
-    from l0_l1b.utils.electronic_ghost import electronic_panel_ghost_correction
-    from l0_l1b.utils.mission_bde import bad_detector_element_correction, \
+    from l0_l1b_l2.l1b_utils.electronic_ghost import ghost_correction
+    from l0_l1b_l2.l1b_utils.mission_bde import bde_correction, \
         detector_array_tap_interpolation, filter_seam_interpolation
-    from l0_l1b.utils.mission_flat import apply_flat
-    from l0_l1b.utils.smooth_shape import load_ssc_factors
-    from l0_l1b.utils.radiometric_calibration import load_rdn_cal_factors
-    from l0_l1b.utils.scattered_light import basic_scattered_light_correction
+    from l0_l1b_l2.l1b_utils.mission_flat import apply_flat
+    from l0_l1b_l2.l1b_utils.smooth_shape import load_ssc_factors
+    from l0_l1b_l2.l1b_utils.radiometric_calibration import load_rdn_cal
+    from l0_l1b_l2.l1b_utils.scattered_light import basic_scattered_light_corr
 
-    obs_image = load_fits_into_frame(moonager.obs_path)
+    obs_image = load_fits_into_frame(moonager.l0_obs_path)
     # obs_image shape = (frames / lines, channels / bands, samples / columns)
 
+    # (1) Dark Signal Subtraction
     if moonager.verbose:
         print("Subtracting dark signal.")
-    # (1) Dark Signal Subtraction
     obs_image -= make_dark_signal_image(
         dark_path=moonager.dark_path,
         dark_method='mean'
     )
-
     if moonager.save_steps:
         fits.writeto(
             f"{moonager.obs_id}_dss.fits",
             np.flip(obs_image.transpose(1, 0, 2), axis=(1, 2)),
             overwrite=True
         )
-
     # (2) Bad Detector Element Correction (Flag)
     if moonager.verbose:
         print("Running flagged pixel correction.")
-    obs_image = bad_detector_element_correction(
+    obs_image = bde_correction(
         obs_data=obs_image,
         bde_path=moonager.flag_path,
     )
-
     if moonager.save_steps:
         fits.writeto(
             f"{moonager.obs_id}_bde.fits",
             obs_image[100:200, :, :],
             overwrite=True
         )
-
     # (3) Detector Tap Interpolation
     if moonager.verbose:
         print("Interpolating tap cols.")
@@ -104,7 +56,6 @@ def run_mission_pipeline(moonager: PipeManager):
         obs_data=obs_image,
         cols=moonager.read_out_cols
     )
-
     # (4) Filter Seam Interpolation
     if moonager.verbose:
         print("Interpolating filter seams.")
@@ -112,30 +63,26 @@ def run_mission_pipeline(moonager: PipeManager):
         obs_data=obs_image,
         channels=moonager.filter_seam_rows
     )
-
     if moonager.save_steps:
         fits.writeto(
             f"{moonager.obs_id}_fs_tap.fits",
             obs_image[100:200, :, :],
             overwrite=True
         )
-
     # (5) Electronic Ghost Correction
     if moonager.verbose:
         print("Running electronic ghost correction.")
-    obs_image = electronic_panel_ghost_correction(
+    obs_image = ghost_correction(
         obs_data=obs_image,
         l0_samples=moonager.l0_samples,
-        ghost_correction=moonager.ghost_correction,
+        correction_factor=moonager.ghost_corr_factor,
     )
-
     if moonager.save_steps:
         fits.writeto(
             f"{moonager.obs_id}_ghost.fits",
             obs_image[100:200, :, :],
             overwrite=True
         )
-
     # (6) Dark Pedestal Shift Correction
     if moonager.verbose:
         print("Running dark pedestal shift correction.")
@@ -143,31 +90,27 @@ def run_mission_pipeline(moonager: PipeManager):
         obs_image=obs_image,
         dark_cols=moonager.dark_cols,
     )
-
     if moonager.save_steps:
         fits.writeto(
             f"{moonager.obs_id}_pedestal.fits",
             obs_image[100:200, :, :],
             overwrite=True,
         )
-
     # (7) Scattered Light Correction
     if moonager.verbose:
         print("Applying scattered light correction.")
-    obs_image = basic_scattered_light_correction(
+    obs_image = basic_scattered_light_corr(
         obs_image=obs_image,
         left_cols=moonager.vignetted_cols_left,
         right_cols=moonager.vignetted_cols_right,
         all_cols=moonager.vignetted_cols,
     )
-
     if moonager.save_steps:
         fits.writeto(
             f"{moonager.obs_id}_sl.fits",
             obs_image[100:200, :, :],
             overwrite=True
         )
-
     # (8) Lab Flat Correction
     if moonager.verbose:
         print("Applying lab flat.")
@@ -176,41 +119,35 @@ def run_mission_pipeline(moonager: PipeManager):
         flat_path=moonager.lab_flat_path,
         # flag_path=moonager.flag_path
     )
-
     if moonager.save_steps:
         fits.writeto(
             f"{moonager.obs_id}_labflat.fits",
             obs_image[100:200, :, :],
             overwrite=True
         )
-
     # (9) Imaging-based Flat Correction
     if moonager.verbose:
         print("Applying observation-level flat.")
     obs_image = apply_flat(
         obs_data=obs_image,
         flat_path=moonager.obs_flat_path,
-        #flag_path=moonager.flag_path
+        # flag_path=moonager.flag_path
     )
-
     if moonager.save_steps:
         fits.writeto(
             f"{moonager.obs_id}_obsflat.fits",
             obs_image[100:200, :, :],
             overwrite=True
         )
-
     # (10) Radiometric Calibration
-    rdn_cal = load_rdn_cal_factors(moonager.rdn_cal_path)
+    rdn_cal = load_rdn_cal(moonager.rdn_cal_path)
     obs_image = obs_image * rdn_cal[np.newaxis, :, np.newaxis]
-
     if moonager.save_steps:
         fits.writeto(
             f"{moonager.obs_id}_radcal.fits",
             obs_image[100:200, :, :],
             overwrite=True
         )
-
     # Drop first channel(s) and trim vignetted and dark columns
     # obs_image shape = (frames / lines, channels / bands, samples / columns)
     if moonager.verbose:
@@ -220,32 +157,29 @@ def run_mission_pipeline(moonager: PipeManager):
                 np.max(moonager.omitted_channels) + 1:,
                 moonager.left_col_cutoff:moonager.right_col_cutoff
                 ]
-
     # (11) Smooth Shape Correction
     ssc_factors = load_ssc_factors(moonager.ssc_path)
     obs_image = obs_image * ssc_factors[np.newaxis, :, np.newaxis]
-
     # (12) Ray tracing / location
     # not implemented
-
-    #TODO: flip things around to the orientation used in level 2 etc
+    # TODO: flip things around to the orientation used in level 2 etc
     # but I think we can only truly implement this after (12)
     return obs_image
 
 
-def run_new_pipeline(moonager: PipeManager):
+def run_l1b_new_pipeline(moonager: PipeManager):
     """
     DPSIS with creative liberties.
     """
-    from l0_l1b.utils.loader import load_fits_into_frame
-    from l0_l1b.utils.dark_obs import make_dark_signal_image, \
+    from l0_l1b_l2.l1b_utils.loader import load_fits_into_frame
+    from l0_l1b_l2.l1b_utils.dark_obs import make_dark_signal_image, \
         experimental_dark_pedestal_correction
-    from l0_l1b.utils.electronic_ghost import electronic_panel_ghost_correction
-    from l0_l1b.utils.mission_bde import bad_detector_element_correction, \
+    from l0_l1b_l2.l1b_utils.electronic_ghost import ghost_correction
+    from l0_l1b_l2.l1b_utils.mission_bde import bde_correction, \
         detector_array_tap_interpolation
-    from l0_l1b.utils.mission_flat import apply_flat
+    from l0_l1b_l2.l1b_utils.mission_flat import apply_flat
 
-    obs_image = load_fits_into_frame(moonager.obs_path)
+    obs_image = load_fits_into_frame(moonager.l0_obs_path)
 
     # Dark Signal Subtraction
     # leaving dark cols of obs image unaffected for pedestal
@@ -262,18 +196,19 @@ def run_new_pipeline(moonager: PipeManager):
         obs_image=obs_image,
         dark_path=moonager.dark_path,
         dark_cols=moonager.dark_cols,
+        bde_path=moonager.flag_path,
     )
 
     # Electronic Ghost Correction
     # fix ghosts before flagged pixels
-    obs_image = electronic_panel_ghost_correction(
+    obs_image = ghost_correction(
         obs_data=obs_image,
         l0_samples=moonager.l0_samples,
-        ghost_correction=moonager.ghost_correction,
+        correction_factor=moonager.ghost_corr_factor,
     )
 
     # Bad Detector Element Correction (Flag)
-    obs_image = bad_detector_element_correction(
+    obs_image = bde_correction(
         obs_data=obs_image,
         bde_path=moonager.flag_path,
     )

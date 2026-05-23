@@ -1,7 +1,8 @@
+from datetime import datetime
 import pandas as pd
 from pathlib import Path
 from typing import Optional
-from l0_l1b import CAL_DIR
+from l0_l1b_l2 import CAL_DIR
 
 
 def pull_metadata(obs_id: str, cal_dir: Optional[str] = None) -> dict:
@@ -88,22 +89,26 @@ def check_observation(obs_id: str, local_root: Optional[str] = None):
     # the 3 K here is somewhat arbitrary. Lower may be more appropriate for
     # a warning, or eventually unnecessary if we use synthetic darks or do
     # away with obs-based flats.
-    if abs(metadata['obs_temperature'] - metadata['flat_field_temp']) > 3:
+    flat_diff = abs(metadata['obs_temperature'] - metadata['flat_field_temp'])
+    if flat_diff > 3:
         obs_warn.append(f"This obs and its flat field obs have a temp "
                         f"difference greater than 3 Kelvin, "
-                        f"{abs(metadata['obs_temperature'] -metadata['dark_signal_temp'])} "
+                        f"{flat_diff} "
                         f"K.")
 
-    if abs(metadata['obs_temperature'] - metadata['dark_signal_temp']) > 3:
+    dark_diff = abs(metadata['obs_temperature'] - metadata['dark_signal_temp'])
+    if dark_diff > 3:
         obs_warn.append(f"This obs and its dark have a temp difference greater"
                         f" than 3 Kelvin, "
-                        f"{abs(metadata['obs_temperature'] -metadata['dark_signal_temp'])} "
+                        f"{dark_diff} "
                         f"K.")
 
     return obs_warn, obs_error, metadata
 
 
 class PipeManager:
+    # this is kind of hellishly long so idk maybe we could structure all this
+    # info differently
 
     def __init__(self,
                  obs_id: str,
@@ -112,25 +117,49 @@ class PipeManager:
                  save_steps: bool = False,
                  verbose: bool = True,
                  ):
+        # pipeline config
+        self.save_steps = save_steps
+        self.verbose = verbose
+        self.local_root = Path(local_root)
 
         # obs metadata
         self.obs_id = obs_id
         self.mode = metadata['obs_type']
         self.obs_period = metadata['obs_period']
+        self.date = metadata['obs_date']
+        self.time = metadata['obs_time']
         self.obs_temp = metadata['obs_temperature']
         self.obs_beta_angle = metadata['obs_beta_angle']
+
+        # temperature as hot or cold based on date, this designation
+        # comes from the L2 section of the DPSIS
+        self.date_time = datetime.fromisoformat(f"{self.date}T{self.time}")
+        self.temp_des = (
+            "cold" if any(
+                datetime.fromisoformat(
+                    s) <= self.date_time < datetime.fromisoformat(e)
+                for s, e in [
+                    ("2009-01-19T00:00:00", "2009-02-15T00:00:00"),
+                    ("2009-04-15T00:00:00", "2009-04-28T00:00:00"),
+                    ("2009-07-12T00:00:00", "2009-08-17T00:00:00"),
+                ]
+            ) else "warm" if any(
+                datetime.fromisoformat(
+                    s) <= self.date_time < datetime.fromisoformat(e)
+                for s, e in [
+                    ("2008-11-18T00:00:00", "2009-01-19T00:00:00"),
+                    ("2009-05-13T00:00:00", "2009-05-17T00:00:00"),
+                    ("2009-05-20T00:00:00", "2009-07-10T00:00:00"),
+                ]
+            ) else None
+        )
+
+        # L0 -> L1B related calibration files
         self.dark_temp = metadata['dark_signal_temp']
         self.dark_id = metadata['dark_signal_id'].lower()
         self.flag_id = metadata['bad_detector_map_id'].lower()
         self.obs_flat_id = metadata['flat_field_id'].lower()
-
-        # pipeline config
-        self.save_steps = save_steps
-        self.verbose = verbose
-
-        # paths
-        self.local_root = Path(local_root)
-        self.obs_path = self.local_root / f'{self.obs_id}_l0.fits'
+        self.l0_obs_path = self.local_root / f'{self.obs_id}_l0.fits'
         self.dark_path = self.local_root / f'{self.dark_id}_l0.fits'
         self.obs_flat_path = self.local_root / f'{self.obs_flat_id}_ff.fits'
         self.flag_path = self.local_root / f'{self.flag_id}_bde.fits'
@@ -145,12 +174,16 @@ class PipeManager:
             self.rdn_gain_path = Path(CAL_DIR) / 'm3g20081211_rdn_gain.tab'
             self.rdn_spc_path = Path(CAL_DIR) / 'm3g20081211_rdn_spc.tab'
             self.rdn_cal_path = Path(CAL_DIR) / 'm3g20081118_rdn_cal.tab'
-        # calibration vals dependant on obs type
+
+        # other L0 -> L1B calibration things
+        self.ghost_corr_factor = .0048
+
+        # specific channel and samples for target and global
+        # mostly for L0 -> L1B but some L1B -> L2
         # TODO: looking at the flats for target makes it seem like they
         #  interpolated across more rows than indicated in the DPSIS, so
         #  this is something we should investigate more thoroughly and
         #  possibly expand the list of rows here
-
         if self.mode.upper() == 'T':
             self.l0_samples = 640
             self.l0_channels = 260
@@ -172,6 +205,8 @@ class PipeManager:
             self.read_out_cols = [0, 160, 320, 480]
             # filter channels are 41, 42, 116 in DPSIS
             self.filter_seam_rows = [40, 41, 115]
+            # for L2
+            self.degraded_channels = [0, 1, 2, 3, 4, 5, 6, 7]
 
         elif self.mode.upper() == 'G':
             self.l0_samples = 320
@@ -191,5 +226,47 @@ class PipeManager:
             self.read_out_cols = [0, 80, 160, 240]
             # 13 and 50 in DPSIS
             self.filter_seam_rows = [12, 49]
+            # for L2
+            self.degraded_channels = [0, 1]
 
-        self.ghost_correction = .0048
+        # L1B -> L2 related calibration files
+        # some of these are both mode and time / date dependant
+        self.l1b_rdn_path = self.local_root / f'{self.obs_id}_l1b_rdn.fits'
+        self.l1b_obs_path = self.local_root / f'{self.obs_id}_l1b_obs.fits'
+        self.l1b_tim_path = self.local_root / f'{self.obs_id}_l1b_tim.tab'
+        self.l1b_loc_path = self.local_root / f'{self.obs_id}_loc.fits'
+
+        if self.mode.upper() == 'T':
+            self.sol_spec_path = Path(
+                CAL_DIR) / 'm3t20110224_rfl_solar_spec.tab'
+            self.old_f_alpha_hil_path = Path(
+                CAL_DIR) / 'm3t20111109_rfl_f_alpha_hil.tab'
+            self.new_f_alpha_hil_path = Path(
+                CAL_DIR) / 'm3t20120120_rfl_f_alpha_hil.tab'
+            if self.temp_des == 'warm':
+                self.grnd_truth_path = Path(
+                    CAL_DIR) / 'm3t20111117_rfl_grnd_tru_2.tab'
+                self.stat_pol_path = Path(
+                    CAL_DIR) / 'm3t20111020_rfl_stat_pol_2.tab'
+            elif self.temp_des == 'cold':
+                self.grnd_truth_path = Path(
+                    CAL_DIR) / 'm3t20111117_rfl_grnd_tru_1.tab'
+                self.stat_pol_path = Path(
+                    CAL_DIR) / 'm3t20111020_rfl_stat_pol_1.tab'
+        elif self.mode.upper() == 'G':
+            self.sol_spec_path = Path(
+                CAL_DIR) / 'm3g20110224_rfl_solar_spec.tab'
+            self.old_f_alpha_hil_path = Path(
+                CAL_DIR) / 'm3g20111109_rfl_f_alpha_hil.tab'
+            self.new_f_alpha_hil_path = Path(
+                CAL_DIR) / 'm3g20120120_rfl_f_alpha_hil.tab'
+            if self.temp_des == 'warm':
+                self.grnd_truth_path = Path(
+                    CAL_DIR) / 'm3g20111117_rfl_grnd_tru_2.tab'
+                self.stat_pol_path = Path(
+                    CAL_DIR) / 'm3g20110830_rfl_stat_pol_2.tab'
+            elif self.temp_des == 'cold':
+                self.grnd_truth_path = Path(
+                    CAL_DIR) / 'm3g20111117_rfl_grnd_tru_1.tab'
+                self.stat_pol_path = Path(
+                    CAL_DIR) / 'm3g20110830_rfl_stat_pol_1.tab'

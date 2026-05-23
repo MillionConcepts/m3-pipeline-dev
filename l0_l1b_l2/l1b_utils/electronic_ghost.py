@@ -1,10 +1,10 @@
 import numpy as np
 
 
-def electronic_panel_ghost_correction(
+def ghost_correction(
         obs_data: np.ndarray,
         l0_samples: int,
-        ghost_correction: float,
+        correction_factor: float,
         dark_cols: str = None,
 ):
     """
@@ -63,7 +63,7 @@ def electronic_panel_ghost_correction(
              frame_panels[:, :, panel_idx+1:, :]],
             axis=2
         )
-        ghost_signal = ghost_correction * other_panels.sum(axis=2)
+        ghost_signal = correction_factor * other_panels.sum(axis=2)
         obs_data_reshaped[:, :, panel_idx, :] += ghost_signal
 
     return obs_data_reshaped.reshape(

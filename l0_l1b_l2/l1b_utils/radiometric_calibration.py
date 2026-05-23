@@ -28,7 +28,7 @@ so RCC = rdn_cal.tab values, we multiply by channels
 """
 
 
-def load_rdn_cal_factors(rdn_cal_path: Path):
+def load_rdn_cal(rdn_cal_path: Path):
     """
     Read in radiometric calibration shape correction factors per channel.
     """

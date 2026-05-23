@@ -9,10 +9,10 @@ def load_fits_into_frame(obs_path: Path) -> np.ndarray:
     """
     from astropy.io import fits
 
+    filename = obs_path.name.lower()
+
     with fits.open(obs_path) as hdul:
         image = hdul[0].data
-
-    filename = obs_path.name.lower()
 
     if "ff" in filename or "flat" in filename:
         return image.astype(np.float32)

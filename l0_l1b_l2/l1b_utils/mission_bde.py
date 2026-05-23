@@ -1,5 +1,6 @@
-import numpy as np
 from pathlib import Path
+
+import numpy as np
 
 
 def detector_array_tap_interpolation(obs_data: np.ndarray, cols: list):
@@ -7,11 +8,16 @@ def detector_array_tap_interpolation(obs_data: np.ndarray, cols: list):
     Columns related to the read-out are linearly interpolated in the spatial
     direction (columns on either side). The columns are 161, 321, 481 for
     target and 81, 161, 241 for global mode.
+
+    For 3D arrays (frames, channels, cols), applies interpolation per-frame.
     """
     cols = np.array(cols)
     if obs_data.ndim == 3:
-        obs_data[:, :, cols] = (obs_data[:, :, cols - 1] +
-                                obs_data[:, :, cols + 1]) / 2.0
+        n_frames = obs_data.shape[0]
+        for frame_idx in range(n_frames):
+            obs_data[frame_idx, :, cols] = (obs_data[frame_idx, :, cols - 1] +
+                                            obs_data[frame_idx, :,
+                                            cols + 1]) / 2.0
     else:
         obs_data[:, cols] = (obs_data[:, cols - 1] +
                              obs_data[:, cols + 1]) / 2.0
@@ -24,26 +30,58 @@ def filter_seam_interpolation(obs_data: np.ndarray, channels: list):
     across them in the spectral direction (these are horizontal features). For
     target mode they are channels 41, 42, and 116 and for global mode they are
     13 and 50.
+
+    For 3D arrays (frames, channels, cols), applies interpolation per-frame.
     """
+    is_3d = obs_data.ndim == 3
+    n_frames = obs_data.shape[0] if is_3d else 1
+
     for channel in channels:
         # we have special cases for 41 & 42 because they are next to each other
         # this could be less specific if we anticipate expanding the number of
         # channels flagged for this, but I don't think we will. We also could
         # get rid of the check if the pipeline is never used for target mode
         # obs.
-        if channel == 41:
-            obs_data[:, 41, :] = (2 / 3) * obs_data[:, 40, :] + \
-                                 (1 / 3) * obs_data[:, 43, :]
-        elif channel == 42:
-            obs_data[:, 42, :] = (1 / 3) * obs_data[:, 40, :] + \
-                                 (2 / 3) * obs_data[:, 43, :]
+        if channel in [41]:
+            if is_3d:
+                for frame_idx in range(n_frames):
+                    obs_data[frame_idx, channel, :] = (2 / 3) * obs_data[
+                                                                frame_idx,
+                                                                channel - 1,
+                                                                :] + \
+                                                      (1 / 3) * obs_data[
+                                                                frame_idx,
+                                                                channel + 2, :]
+            else:
+                obs_data[channel, :] = (1 / 3) * obs_data[channel - 1, :] + \
+                                       (2 / 3) * obs_data[channel + 2, :]
+        elif channel in [42]:
+            if is_3d:
+                for frame_idx in range(n_frames):
+                    obs_data[frame_idx, channel, :] = (1 / 3) * obs_data[
+                                                                frame_idx,
+                                                                channel - 2,
+                                                                :] + \
+                                                      (2 / 3) * obs_data[
+                                                                frame_idx,
+                                                                channel + 1, :]
+            else:
+                obs_data[channel, :] = (1 / 3) * obs_data[channel - 2, :] + \
+                                       (2 / 3) * obs_data[channel + 1, :]
         else:
-            obs_data[:, channel, :] = (obs_data[:, channel - 1, :] +
-                                       obs_data[:, channel + 1, :]) / 2.0
+            if is_3d:
+                for frame_idx in range(n_frames):
+                    obs_data[frame_idx, channel, :] = (obs_data[frame_idx,
+                                                       channel - 1, :] +
+                                                       obs_data[frame_idx,
+                                                       channel + 1, :]) / 2.0
+            else:
+                obs_data[:, channel, :] = (obs_data[:, channel - 1, :] +
+                                           obs_data[:, channel + 1, :]) / 2.0
     return obs_data
 
 
-def bad_detector_element_correction(obs_data: np.ndarray, bde_path: Path):
+def bde_correction(obs_data: np.ndarray, bde_path: Path):
     """
     Elements are flagged 0-5 in these fits files. Values 1-4 seem to indicate
     things that are "flagged", 1 being the lowest level and 4 the highest. I
