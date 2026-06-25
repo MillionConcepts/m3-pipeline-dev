@@ -4,9 +4,63 @@ from astropy.io import fits
 from l0_l1b_l2.reference import PipeManager
 
 
+def make_dark_std_backplane(moonager: PipeManager):
+    """
+    Optional, not in original pipeline: Make dark std backplane, processed to
+    radiance units.
+    We skip some steps: dark pedestal, scattered light, flats. These all deal
+    with effects that don't happen in a dark signal image. The flats especially
+    would introduce rippled light. I don't know if this will end up being very
+    useful, but given how much dark signal images vary at higher temperatures,
+    the idea is to get an estimate of the error that could be on a pixel
+    (ie if the background varies by 10 DN during an obs, here is that same 10
+    DN in radiance units).
+    """
+    import numpy as np
+    from l0_l1b_l2.l1b_utils.dark_obs import make_dark_signal_image
+    from l0_l1b_l2.l1b_utils.mission_bde import bde_correction, \
+        detector_array_tap_interpolation, filter_seam_interpolation
+    from l0_l1b_l2.l1b_utils.smooth_shape import load_ssc_factors
+    from l0_l1b_l2.l1b_utils.radiometric_calibration import load_rdn_cal
+
+    # we do load a lot of stuff twice doing this separate from the
+    # main pipeline. but they are all small files. so IDK.
+    dark_std = make_dark_signal_image(
+        dark_path=moonager.dark_path,
+        dark_method='std'
+    )
+    dark_std = bde_correction(
+        obs_data=dark_std,
+        bde_path=moonager.flag_path,
+    )
+    dark_std = detector_array_tap_interpolation(
+        obs_data=dark_std,
+        cols=moonager.read_out_cols
+    )
+
+    # filter seams don't show up in darks, but bc the real values get removed
+    # in the obs, we also interpolate.
+    # dark_std = filter_seam_interpolation(
+    #     obs_data=dark_std,
+    #     channels=moonager.filter_seam_rows
+    # )
+    rdn_cal = load_rdn_cal(moonager.rdn_cal_path)
+    dark_std = dark_std * rdn_cal[:, np.newaxis]
+    dark_std = dark_std[
+                np.max(moonager.omitted_channels) + 1:,
+                moonager.left_col_cutoff:moonager.right_col_cutoff
+                ]
+    ssc_factors = load_ssc_factors(moonager.ssc_path)
+    dark_std = dark_std * ssc_factors[:, np.newaxis]
+
+    return dark_std
+
+
 def run_l1b_mission_pipeline(moonager: PipeManager):
     """
     L0 to L1B Pipeline based on an originalist reading of the DPSIS.
+    If moonager.backplanes = True, returns the obs image and the dark std
+    processed to radiance. Else, just returns the obs in radiance.
     """
     import numpy as np
     from l0_l1b_l2.l1b_utils.loader import load_fits_into_frame
@@ -19,6 +73,7 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
     from l0_l1b_l2.l1b_utils.smooth_shape import load_ssc_factors
     from l0_l1b_l2.l1b_utils.radiometric_calibration import load_rdn_cal
     from l0_l1b_l2.l1b_utils.scattered_light import basic_scattered_light_corr
+    from l0_l1b_l2.reference import check_l1b_label
 
     obs_image = load_fits_into_frame(moonager.l0_obs_path)
     # obs_image shape = (frames / lines, channels / bands, samples / columns)
@@ -161,9 +216,27 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
     ssc_factors = load_ssc_factors(moonager.ssc_path)
     obs_image = obs_image * ssc_factors[np.newaxis, :, np.newaxis]
     # (12) Ray tracing / location
-    # not implemented
-    # TODO: flip things around to the orientation used in level 2 etc
-    # but I think we can only truly implement this after (12)
+    # TODO: flip things around to the orientation used in level 2 etc.
+    #   For now, we check for a relevant L1B label which gives orientation info
+    #   and then flip around accordingly. if there is no L1B label, return as
+    #   is.
+
+    # load orientation info from L1B label
+    reverse_lines, reverse_samples = check_l1b_label(moonager.l1b_label)
+
+    if reverse_lines:
+        obs_image = obs_image[::-1, :, :]
+    if reverse_samples:
+        obs_image = obs_image[:, :, ::-1]
+
+    # make backplanes, if you want
+    if moonager.backplanes:
+        dark_std = make_dark_std_backplane(moonager)
+        if reverse_samples:
+            dark_std = dark_std[:, ::-1]
+
+        return obs_image, dark_std
+
     return obs_image
 
 

@@ -11,6 +11,7 @@ def run_pipe(
     pipe_version: Literal['mission', 'new'] = 'mission',
     local_root: str = "data",
     save_steps: bool = False,
+    backplanes: bool = False,
     verbose: bool = True,
 ):
     """
@@ -22,6 +23,7 @@ def run_pipe(
            local_root: Where is the data stored?
            save_steps: Save intermediate step data as fits files. Eventually we
            could change this to designate specific steps to save.
+           backplanes: Return backplanes (flag map, "error" from dark std)
            verbose: Give me all the info or don't.
     """
 
@@ -38,6 +40,7 @@ def run_pipe(
         metadata=metadata,
         local_root=local_root,
         save_steps=save_steps,
+        backplanes=backplanes,
         verbose=verbose,
     )
 

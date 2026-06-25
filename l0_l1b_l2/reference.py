@@ -15,7 +15,7 @@ def pull_metadata(obs_id: str, cal_dir: Optional[str] = None) -> dict:
     if not isinstance(cal_dir, Path):
         cal_dir = Path(cal_dir)
 
-    metadata = pd.read_csv(cal_dir/"obs_cal_info.csv")
+    metadata = pd.read_csv(cal_dir / "obs_cal_info.csv")
     metadata = metadata[metadata['obs_id'] == obs_id.upper()]
 
     # sometimes there are multiple versions per obs, we want the latest one
@@ -81,8 +81,8 @@ def check_observation(obs_id: str, local_root: Optional[str] = None):
                         f"{metadata['dark_signal_id']}.")
 
     # somewhat arbitrary warning at 10% flagged
-    if metadata['bde_flag_coverage']*100 > 10:
-        obs_warn.append(f"{metadata['bde_flag_coverage']*100}% of the "
+    if metadata['bde_flag_coverage'] * 100 > 10:
+        obs_warn.append(f"{metadata['bde_flag_coverage'] * 100}% of the "
                         f"mission-derived bad element map is flagged for this "
                         f"observation.")
 
@@ -115,10 +115,12 @@ class PipeManager:
                  local_root: str,
                  metadata: dict,
                  save_steps: bool = False,
+                 backplanes: bool = False,
                  verbose: bool = True,
                  ):
         # pipeline config
         self.save_steps = save_steps
+        self.backplanes = backplanes
         self.verbose = verbose
         self.local_root = Path(local_root)
 
@@ -161,6 +163,7 @@ class PipeManager:
         self.obs_flat_id = metadata['flat_field_id'].lower()
         self.l0_obs_path = self.local_root / f'{self.obs_id}_l0.fits'
         self.dark_path = self.local_root / f'{self.dark_id}_l0.fits'
+        self.l1b_label = str(self.local_root / f'{self.obs_id}_l1b.xml')
         self.obs_flat_path = self.local_root / f'{self.obs_flat_id}_ff.fits'
         self.flag_path = self.local_root / f'{self.flag_id}_bde.fits'
         self.ssc_path = self.local_root / f'{self.obs_id}_ssc.txt'
@@ -270,3 +273,33 @@ class PipeManager:
                     CAL_DIR) / 'm3g20111117_rfl_grnd_tru_1.tab'
                 self.stat_pol_path = Path(
                     CAL_DIR) / 'm3g20110830_rfl_stat_pol_1.tab'
+
+
+def check_l1b_label(l1b_path: str):
+    """
+    Read L1B label for yaw / limb direction to undo until we have our own
+    orientation info.
+    """
+    import pds4_tools
+
+    try:
+        label = pds4_tools.pds4_read(
+            l1b_path, lazy_load=True, quiet=True
+        ).label
+    except:
+        # if we don't have the label
+        print("Original L1B label missing, needed for orientation info.")
+        return False, False
+
+    params = label.to_dict()['Product_Observational']['Observation_Area'][
+        'Mission_Area']['chan1:Chandrayaan-1_Parameters']
+
+    yaw = params['chan1:spacecraft_yaw_direction'].lower()
+    limb = params['chan1:orbit_limb_direction'].lower()
+    print(yaw)
+    print(limb)
+    reverse_lines = (limb == "ascending")
+    reverse_samples = (limb == "descending" and yaw == "reverse") or \
+                      (limb == "ascending" and yaw == "forward")
+
+    return reverse_lines, reverse_samples
