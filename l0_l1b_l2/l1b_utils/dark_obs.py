@@ -35,7 +35,7 @@ def make_dark_signal_image(
 
     # exclude first and last two frames bc they can be funky. this number
     # could increase tbh but haven't done extensive investigation
-    exc = 5
+    exc = 1
 
     if dark_method.lower() == 'mean':
         dark_signal = dark_obs_data[exc:-exc, :, :].mean(axis=0)

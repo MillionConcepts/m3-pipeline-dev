@@ -18,6 +18,10 @@ def pull_metadata(obs_id: str, cal_dir: Optional[str] = None) -> dict:
     metadata = pd.read_csv(cal_dir / "obs_cal_info.csv")
     metadata = metadata[metadata['obs_id'] == obs_id.upper()]
 
+    if len(metadata) == 0:
+        print("This is not a valid observation ID, although it could be a dark"
+              " signal observation.")
+
     # sometimes there are multiple versions per obs, we want the latest one
     # ie V03 instead of V01
     if len(metadata) > 1:
@@ -207,7 +211,7 @@ class PipeManager:
             # read out / tap cols are 1, 161, 321, 481 in DPSIS
             self.read_out_cols = [0, 160, 320, 480]
             # filter channels are 41, 42, 116 in DPSIS
-            self.filter_seam_rows = [40, 41, 115]
+            self.filter_seam_rows = [40, 41, 39, 115, 116, 114]
             # for L2
             self.degraded_channels = [0, 1, 2, 3, 4, 5, 6, 7]
 
