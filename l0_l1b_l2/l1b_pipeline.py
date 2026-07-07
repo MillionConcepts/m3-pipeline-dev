@@ -250,7 +250,7 @@ def run_l1b_new_pipeline(moonager: PipeManager):
     from l0_l1b_l2.l1b_utils.electronic_ghost import ghost_correction
     from l0_l1b_l2.l1b_utils.mission_bde import bde_correction, \
         detector_array_tap_interpolation
-    from l0_l1b_l2.l1b_utils.mission_flat import apply_flat
+    from l0_l1b_l2.l1b_utils.new_flat import get_relative_gain_flat
 
     obs_image = load_fits_into_frame(moonager.l0_obs_path)
 
@@ -289,19 +289,18 @@ def run_l1b_new_pipeline(moonager: PipeManager):
     # Detector Tap Interpolation
     obs_image = detector_array_tap_interpolation(
         obs_data=obs_image,
-        cols=moonager.read_out_cols
+        cols=moonager.read_out_cols,
     )
 
     # Scattered Light Correction
     # not implemented
 
-    # # Lab Flat Correction
-    obs_image = apply_flat(
-        obs_data=obs_image,
-        flat_path=moonager.lab_flat_path,
+    # New flat
+    flat = get_relative_gain_flat(
+        obs_image=obs_image,
+        moonager=moonager,
     )
-
-    # No lab based flat because we modified the lab flat?
+    obs_image = obs_image * flat
 
     # Radiometric Calibration
     # not implemented
