@@ -40,7 +40,7 @@ def make_relative_gain_flat(
             signal subtracted otherwise the results will be dominated by dark
             signal.
         direction: Which adjacent column to use for relative diff (left or
-            right). Defaults to left.
+            right). Defaults to left. NOT USED RN.
         left_cutoff: Left side of detector to mask (not illuminated).
         right_cutoff: Right side of detector to mask (not illuminated).
         readout_cols: Readout cols to mask.
@@ -68,10 +68,7 @@ def make_relative_gain_flat(
 
         # we put the DN in log space bc log x - log y = log(x/y)
         log_data = np.log(band_data)
-        if direction == "right":
-            log_ratio_pairs = log_data[:, :-1] - log_data[:, 1:]
-        else:
-            log_ratio_pairs = log_data[:, 1:] - log_data[:, :-1]
+        log_ratio_pairs = log_data[:, 1:] - log_data[:, :-1]
 
         # don't use columns with low std? we don't want noise to be
         # interpreted as real, reoccurring column to column differences
@@ -91,13 +88,7 @@ def make_relative_gain_flat(
                                     median_log_ratio, 0.0)
         median_log_ratio = np.nan_to_num(median_log_ratio, nan=0.0)
 
-        if direction == "right":
-            combined_gains = np.concatenate((
-                -np.cumsum(median_log_ratio[::-1])[::-1],
-                [0.0]
-            ))
-        else:
-            combined_gains = np.concatenate((
+        combined_gains = np.concatenate((
                 [0.0],
                 np.cumsum(median_log_ratio)
             ))
@@ -130,13 +121,15 @@ def get_relative_gain_flat(obs_image: np.ndarray, moonager) -> np.ndarray:
         min_valid_frac=0.5,
     )
 
-    flat_2 = make_relative_gain_flat(
-        obs_image,
-        direction='right',
-        left_cutoff=moonager.left_col_cutoff,
-        right_cutoff=moonager.right_col_cutoff,
-        readout_cols=moonager.read_out_cols,
-        min_valid_frac=0.5,
-    )
+    # flat_2 = make_relative_gain_flat(
+    #     obs_image,
+    #     direction='right',
+    #     left_cutoff=moonager.left_col_cutoff,
+    #     right_cutoff=moonager.right_col_cutoff,
+    #     readout_cols=moonager.read_out_cols,
+    #     min_valid_frac=0.5,
+    # )
 
-    return ((1.0 / flat_1) + flat_2) / 2.0
+    #return ((1.0 / flat_1) + flat_2) / 2.0
+
+    return 1.0 / flat_1
