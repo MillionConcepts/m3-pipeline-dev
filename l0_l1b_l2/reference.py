@@ -21,13 +21,14 @@ def pull_metadata(obs_id: str, cal_dir: Optional[str] = None) -> dict:
     if len(metadata) == 0:
         print("This is not a valid observation ID, although it could be a dark"
               " signal observation.")
-
+        return None
     # sometimes there are multiple versions per obs, we want the latest one
     # ie V03 instead of V01
-    if len(metadata) > 1:
-        metadata = metadata.loc[
-            metadata['version'].str.extract(r'(\d+)')[0].astype(int).idxmax()]
-        return metadata.to_dict()
+    elif len(metadata) > 1:
+        best_idx = metadata['version'].str.extract(r'(\d+)')[0].astype(
+            int).idxmax()
+        metadata = metadata.loc[[best_idx]]
+
     return metadata.iloc[0].to_dict()
 
 
