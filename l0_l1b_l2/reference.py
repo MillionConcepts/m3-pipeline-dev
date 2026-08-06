@@ -222,12 +222,12 @@ class PipeManager:
             self.l1b_samples = 304
             self.l1b_channels = 85
             self.omitted_channels = [0]
-            self.dark_cols = [1, 2, 3, 318, 319]
+            self.dark_cols = [1, 2, 318, 319]
             # the vignetted cols for global are not listed explicitly
             # in the DPSIS
-            self.vignetted_cols_left = [4, 5, 6]  # cut 8 and 7
-            self.vignetted_cols_right = [314, 315, 316, 317]  # 313 cut?
-            self.vignetted_cols = [4, 5, 6, 314, 315, 316, 317]
+            self.vignetted_cols_left = [5, 6, 7]  # cut 8 and 7
+            self.vignetted_cols_right = [314, 315, 316]  # 313 cut?
+            self.vignetted_cols = [5, 6, 7, 314, 315, 316]
             # 304 samples after trimming cols
             self.left_col_cutoff = 9  # inclusive
             self.right_col_cutoff = 313  # exclusive
