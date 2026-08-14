@@ -1,6 +1,7 @@
 # M3 Calibration Pipelines for L0 to L1B processing
 
 from astropy.io import fits
+import numpy as np
 from l0_l1b_l2.reference import PipeManager
 
 
@@ -16,7 +17,6 @@ def make_dark_std_backplane(moonager: PipeManager):
     (ie if the background varies by 10 DN during an obs, here is that same 10
     DN in radiance units).
     """
-    import numpy as np
     from l0_l1b_l2.l1b_utils.dark_obs import make_dark_signal_image
     from l0_l1b_l2.l1b_utils.mission_bde import bde_correction, \
         detector_array_tap_interpolation, filter_seam_interpolation
@@ -62,7 +62,6 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
     If moonager.backplanes = True, returns the obs image and the dark std
     processed to radiance. Else, just returns the obs in radiance.
     """
-    import numpy as np
     from l0_l1b_l2.l1b_utils.loader import load_fits_into_frame
     from l0_l1b_l2.l1b_utils.dark_obs import make_dark_signal_image, \
         basic_dark_pedestal_correction
@@ -88,7 +87,7 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
     if moonager.save_steps:
         fits.writeto(
             f"{moonager.obs_id}_dss.fits",
-            np.flip(obs_image.transpose(1, 0, 2), axis=(1, 2)),
+            obs_image[moonager.line_start:moonager.line_stop, :, :],
             overwrite=True
         )
     # (2) Bad Detector Element Correction (Flag)
@@ -101,7 +100,7 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
     if moonager.save_steps:
         fits.writeto(
             f"{moonager.obs_id}_bde.fits",
-            obs_image[100:200, :, :],
+            obs_image[moonager.line_start:moonager.line_stop, :, :],
             overwrite=True
         )
     # (3) Detector Tap Interpolation
@@ -121,7 +120,7 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
     if moonager.save_steps:
         fits.writeto(
             f"{moonager.obs_id}_fs_tap.fits",
-            obs_image[100:200, :, :],
+            obs_image[moonager.line_start:moonager.line_stop, :, :],
             overwrite=True
         )
     # (5) Electronic Ghost Correction
@@ -135,7 +134,7 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
     if moonager.save_steps:
         fits.writeto(
             f"{moonager.obs_id}_ghost.fits",
-            obs_image[100:200, :, :],
+            obs_image[moonager.line_start:moonager.line_stop, :, :],
             overwrite=True
         )
     # (6) Dark Pedestal Shift Correction
@@ -148,7 +147,7 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
     if moonager.save_steps:
         fits.writeto(
             f"{moonager.obs_id}_pedestal.fits",
-            obs_image[100:200, :, :],
+            obs_image[moonager.line_start:moonager.line_stop, :, :],
             overwrite=True,
         )
     # (7) Scattered Light Correction
@@ -163,7 +162,7 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
     if moonager.save_steps:
         fits.writeto(
             f"{moonager.obs_id}_sl.fits",
-            obs_image[100:200, :, :],
+            obs_image[moonager.line_start:moonager.line_stop, :, :],
             overwrite=True
         )
     # (8) Lab Flat Correction
@@ -177,7 +176,7 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
     if moonager.save_steps:
         fits.writeto(
             f"{moonager.obs_id}_labflat.fits",
-            obs_image[100:200, :, :],
+            obs_image[moonager.line_start:moonager.line_stop, :, :],
             overwrite=True
         )
     # (9) Imaging-based Flat Correction
@@ -191,7 +190,7 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
     if moonager.save_steps:
         fits.writeto(
             f"{moonager.obs_id}_obsflat.fits",
-            obs_image[100:200, :, :],
+            obs_image[moonager.line_start:moonager.line_stop, :, :],
             overwrite=True
         )
     # (10) Radiometric Calibration
@@ -200,7 +199,7 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
     if moonager.save_steps:
         fits.writeto(
             f"{moonager.obs_id}_radcal.fits",
-            obs_image[100:200, :, :],
+            obs_image[moonager.line_start:moonager.line_stop, :, :],
             overwrite=True
         )
     # Drop first channel(s) and trim vignetted and dark columns
@@ -252,6 +251,7 @@ def run_l1b_new_pipeline(moonager: PipeManager):
     from l0_l1b_l2.l1b_utils.mission_bde import bde_correction, \
         detector_array_tap_interpolation
     from l0_l1b_l2.l1b_utils.new_flat import get_relative_gain_flat
+    from l0_l1b_l2.l1b_utils.radiometric_calibration import load_rdn_cal
 
     obs_image = load_fits_into_frame(moonager.l0_obs_path)
 
@@ -309,7 +309,8 @@ def run_l1b_new_pipeline(moonager: PipeManager):
     obs_image = obs_image * flat
 
     # Radiometric Calibration
-    # not implemented
+    rdn_cal = load_rdn_cal(moonager.rdn_cal_path)
+    obs_image = obs_image * rdn_cal[np.newaxis, :, np.newaxis]
 
     # Smooth Shape Correction
     # not implemented

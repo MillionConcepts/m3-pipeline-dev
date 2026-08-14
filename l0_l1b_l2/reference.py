@@ -129,6 +129,12 @@ class PipeManager:
         self.verbose = verbose
         self.local_root = Path(local_root)
 
+        # for intermediate image cropping (if you want to quality check
+        # only a section etc).
+        # TODO: could offer this as an option for the whole pipeline tbh
+        self.line_start = 100
+        self.line_stop = 200
+
         # obs metadata
         self.obs_id = obs_id
         self.mode = metadata['obs_type']
@@ -291,9 +297,9 @@ def check_l1b_label(l1b_path: str):
         label = pds4_tools.pds4_read(
             l1b_path, lazy_load=True, quiet=True
         ).label
-    except:
-        # if we don't have the label
-        print("Original L1B label missing, needed for orientation info.")
+    except Exception as e:
+        print(f"Issue opening original L1B label, information inside needed "
+              f"for orientation info: {e}")
         return False, False
 
     params = label.to_dict()['Product_Observational']['Observation_Area'][
