@@ -246,7 +246,8 @@ def run_l1b_new_pipeline(moonager: PipeManager):
     """
     from l0_l1b_l2.l1b_utils.loader import load_fits_into_frame
     from l0_l1b_l2.l1b_utils.dark_obs import make_dark_signal_image, \
-        experimental_dark_pedestal_correction
+        experimental_dark_pedestal_correction, \
+        illumination_based_dark_pedestal_correction
     from l0_l1b_l2.l1b_utils.electronic_ghost import ghost_correction
     from l0_l1b_l2.l1b_utils.mission_bde import bde_correction, \
         detector_array_tap_interpolation
@@ -264,12 +265,17 @@ def run_l1b_new_pipeline(moonager: PipeManager):
     )
     obs_image -= dark_signal_image
 
-    # Dark Pedestal Shift Correction
-    obs_image = experimental_dark_pedestal_correction(
+    # # Dark Pedestal Shift Correction
+    # obs_image = experimental_dark_pedestal_correction(
+    #     obs_image=obs_image,
+    #     dark_path=moonager.dark_path,
+    #     dark_cols=moonager.dark_cols,
+    #     bde_path=moonager.flag_path,
+    # )
+    obs_image = illumination_based_dark_pedestal_correction(
         obs_image=obs_image,
-        dark_path=moonager.dark_path,
-        dark_cols=moonager.dark_cols,
-        bde_path=moonager.flag_path,
+        left_cutoff_col=moonager.left_col_cutoff,
+        right_cutoff_col=moonager.right_col_cutoff,
     )
 
     # Electronic Ghost Correction

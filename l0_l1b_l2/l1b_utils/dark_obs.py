@@ -71,7 +71,14 @@ def basic_dark_pedestal_correction(
     Otherwise, they will be huge numbers that get subtracted.
 
     We apply on a line by line (aka frame by frame) basis because that's what
-    the DPSIS did.
+    the DPSIS says. This is also what the HVM3 code does. I don't really
+    understand this on a theoretical basis because brighter illuminated bands
+    have a stronger dark pedestal effect while less illuminated areas have a
+    lower dark pedestal effect.
+
+    Also, the columns on the side of the detector seem to grow in value at a
+    faster rate than the median of the columns in the middle (especially on
+    the left side).
 
     Args:
         obs_image: Obs image data, dark subtracted.
@@ -84,6 +91,45 @@ def basic_dark_pedestal_correction(
     # pedestal for each frame
     pedestals = np.median(obs_image[:, :, dark_cols], axis=(1, 2))
     obs_image = obs_image - pedestals[:, np.newaxis, np.newaxis]
+
+    return obs_image
+
+
+def illumination_based_dark_pedestal_correction(
+        obs_image: np.ndarray,
+        left_cutoff_col: int,
+        right_cutoff_col: int,
+) -> np.ndarray:
+    """
+    Using the dark pedestal columns on the left and right side of the array
+    to determine the dark pedestal effect is a messy science because
+    1) they increase in noisiness as the detector warms up
+    2) they increase at a different rate than other parts of the detector
+    3) they could be a bad pixel from the starts
+    4) the dark signal obs used could be too different in temperature
+
+    By comparing the dark pedestal effect per band against the median
+    illuminated signal per band per line, we see that the dark pedestal effect
+    is a 3-5% effect at most bands (things get messy below channel ~20 in
+    global, where the SNR is not as good).
+
+    So here we take the median signal of a line per band and add 5% back
+    to the image. In the future we could consider calculating the dark pedestal
+    ratio per observation.
+
+    Args:
+        obs_image: Obs image data, dark subtracted.
+        left_cutoff_col: Left side of illuminated area.
+        right_cutoff_col: Right side of illuminated area.
+    """
+    # could squeeze in further to avoid weird illuminated edges at
+    # low/high bands
+    pedestals = np.median(obs_image[:, :, left_cutoff_col:right_cutoff_col],
+                          axis=2) * 0.05
+
+    # abs value the pedestal for the infrequent scenario that it is a very dark
+    # section of an observation that has been over dark signal subtracted
+    obs_image = obs_image + np.abs(pedestals[:, :, np.newaxis])
 
     return obs_image
 
@@ -112,7 +158,7 @@ def experimental_dark_pedestal_correction(
         dark_cols: Columns used for estimating dark signal.
     """
     from .loader import load_fits_into_frame
-    from .mission_bde import bad_detector_element_correction, \
+    from .mission_bde import bde_correction, \
         detector_array_tap_interpolation
     if dark_cols is None:
         # don't do this
@@ -126,7 +172,7 @@ def experimental_dark_pedestal_correction(
 
     dark_signal = detector_array_tap_interpolation(dark_signal, tap_cols)
 
-    dark_signal = bad_detector_element_correction(dark_signal, bde_path)
+    dark_signal = bde_correction(dark_signal, bde_path)
 
     for frame in range(obs_image.shape[0]):
         for channel in range(obs_image.shape[1]):
