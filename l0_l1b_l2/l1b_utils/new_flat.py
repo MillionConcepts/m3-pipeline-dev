@@ -135,15 +135,15 @@ def get_relative_gain_flat(obs_image: np.ndarray, moonager) -> np.ndarray:
     return 1.0 / flat_1
 
 
-def variable_column_correction(
-        obs_data: np.ndarray,
+def find_variable_column_blocks(
+        obs_band_combo: np.ndarray,
         col_groups: dict,
-        comp_window=4,
-        min_offset=.8,
+        comp_window=1,
+        min_offset=.6,
         max_offset=10.0,
-        min_cols_frac=0.6,
+        min_cols_frac=0.3,
         offset_type="auto",
-        max_gap=5,
+        max_gap=10,
         min_block_size=20,
         end_threshold=1.0,
         end_window=2,
@@ -162,12 +162,12 @@ def variable_column_correction(
     Returns dictionary with all blocks of relatively high or low col behavior.
 
     Args:
-        obs_data: Median across bands of full observation, could be in DN or
-            radiance. Must be dark signal subtracted otherwise the results will
-            be dominated by dark signal.
+        obs_band_combo: Median across bands of full observation, could be in DN
+            or radiance. Must be dark signal subtracted otherwise the results
+            will be dominated by dark signal.
         #TODO: is sum or mean better than median? could do band by band but
             #noisier then
-        col_groups: Dictionary with lists of columns.
+        col_groups: Dictionary with lists of bad columns.
         comp_window: Which neighboring columns to compare bad col values to.
         min_offset: Minimum offset with neighboring columns to be considered
             a bump or dip.
@@ -184,7 +184,7 @@ def variable_column_correction(
             NOT relative to neighboring columns.
         end_window: Area within which the end could occur for all group cols.
     """
-    n_lines, n_cols = obs_data.shape
+    n_lines, n_cols = obs_band_combo.shape
 
     block_results = {}
 
@@ -211,25 +211,25 @@ def variable_column_correction(
             hi = min(c + comp_window + 1, n_cols)
             neighbor_cols = [k for k in range(lo, hi) if k != c]
             # mean or median? median meaningless if it's two cols
-            neighbor_mean = obs_data[:, neighbor_cols].mean(axis=1)
-            target_val = obs_data[:, c]
+            neighbor_mean = obs_band_combo[:, neighbor_cols].mean(axis=1)
+            target_val = obs_band_combo[:, c]
             offsets[:, j] = neighbor_mean - target_val
 
         # vectorize?
         matches = np.zeros_like(offsets, dtype=bool)
         for j, d in enumerate(offset_types):
-            col_dev = offsets[:, j]
-            mag = np.abs(col_dev)
+            col_offset = offsets[:, j]
+            mag = np.abs(col_offset)
             in_range = (mag >= min_offset) & (mag <= max_offset)
 
             # we do know some cols tend to be higher rather than lower but
             # IDK if that's 100% true all the time
             if d == "drop":
-                sign_ok = col_dev > 0
+                sign_ok = col_offset > 0
             elif d == "bump":
-                sign_ok = col_dev < 0
+                sign_ok = col_offset < 0
             elif d == "auto":
-                sign_ok = np.ones_like(col_dev, dtype=bool)
+                sign_ok = np.ones_like(col_offset, dtype=bool)
             else:
                 raise ValueError(
                     f"invalid dir type '{d}'")
@@ -259,8 +259,7 @@ def variable_column_correction(
         # look for where the DN suddenly changes across all cols (within the
         # cols themselves, not relative to neighbors)
         delta = np.abs(
-            magnitude_matrix[end_window:, :] - magnitude_matrix[:-end_window,
-                                               :])
+            magnitude_matrix[end_window:, :] - magnitude_matrix[:-end_window:])
         cols_jumped_frac = np.mean(delta >= end_threshold, axis=1)
         cols_jumped_frac = np.concatenate(
             [np.zeros(end_window), cols_jumped_frac])
@@ -321,17 +320,120 @@ def variable_column_correction(
                 "start_line": s,
                 "end_line": e,
                 "n_lines": e - s + 1,
-                "mean_deviation_per_column": {idx: mean_per_col[j] for
-                                              j, idx in enumerate(indices)},
-                "median_deviation_per_column": {idx: median_per_col[j]
-                                                for j, idx in
-                                                enumerate(indices)},
+                "mean_offset_per_col": {idx: mean_per_col[j] for
+                                        j, idx in enumerate(indices)},
+                "median_offset_per_col": {idx: median_per_col[j]
+                                          for j, idx in
+                                          enumerate(indices)},
                 "offset_type_per_col": offset_per_col,
-                "mean_deviation_block": np.nanmean(seg),
-                "median_deviation_block": np.nanmedian(seg),
+                "mean_offset_block": np.nanmean(seg),
+                "median_offset_block": np.nanmedian(seg),
                 "offset_type_block": offset_block,
             }
 
         block_results[group_name] = group_result
 
     return block_results
+
+
+def apply_variable_column_correction(
+        obs_image: np.ndarray,
+        block_results: dict,
+        stat: Literal["median", "mean"] = "median",
+        method: Literal["column", "block"] = "column",
+        skip_mixed_type: bool = False,
+) -> np.ndarray:
+    """
+    Apply the offsets found in find_variable_column_blocks to each bad col
+    block. Same offset is applied to all bands of each col, optional to
+    apply a different offset per col within a block or the same offset to all
+    cols within a block. obs_image edited in place.
+
+    Args:
+        obs_image: Input image, in bands x lines x cols. Could be rdn / rfl or
+            DN but need to change settings for anything not DN.
+        block_results: Dict of block info.
+        stat: Correct the columns using either the mean or median value.
+        method: "column" to correct using column-level stats within the block,
+            or using block level stats, "block".
+        skip_mixed_type: if True, columns/blocks with offset_type_per_col
+            "mixed" or "unknown" are not corrected.
+    """
+
+    # correction offset amount stored in dict per block / col group
+    stat_name = f"{stat}_offset_per_col" if method == "column" \
+        else f"{stat}_offset_block "
+
+    for group_name, blocks in block_results.items():
+
+        if not blocks:
+            print('No bad column blocks identified.')
+            continue
+
+        # run fix per block of ID'd bad lines, using one offset value per block
+        # or one offset value per column per block
+        for block_idx, block in blocks.items():
+            s = block["start_line"]
+            e = block["end_line"] + 1
+            types_per_col = block["offset_type_per_col"]
+
+            offset_vals = block[stat_name]
+
+            if method == "block":
+                if np.isnan(offset_vals):
+                    continue
+                if skip_mixed_type and block["offset_type_block"] in (
+                        "mixed", "unknown"):
+                    # skipping whole block
+                    continue
+                for col_idx in types_per_col.keys():
+                    c = col_idx - 1
+                    obs_image[:, s:e, c] += offset_vals
+
+            elif method == "column":
+                for col_idx, offset in offset_vals.items():
+                    if skip_mixed_type and types_per_col.get(col_idx) in (
+                            "mixed", "unknown"):
+                        # skipping col
+                        continue
+                    if np.isnan(offset):
+                        continue
+                    c = col_idx - 1
+                    obs_image[:, s:e, c] += offset
+
+    return obs_image
+
+
+def fix_variable_columns(obs_image: np.ndarray, col_groups: dict):
+    """
+    Wrapper for finding blocks of lines where multiple columns are
+    simultaneously higher or lower in DN across bands (caused by some kind
+    of background electronic effect).
+
+    Identify blocks of lines where pre-identified column groups are bad and
+    applies an offset.
+
+    Args:
+        obs_image: Input image, in bands x lines x cols. Could be rdn / rfl or
+            DN but need to change settings for anything not DN.
+        col_groups: Dictionary with lists of bad columns.
+    """
+
+    block_results = find_variable_column_blocks(
+        np.mean(obs_image[:15, :, :], axis=0),
+        col_groups
+    )
+
+    if any(block_results.values()):
+        # only run fix if there's something to fix
+        obs_image = apply_variable_column_correction(
+            obs_image,
+            block_results,
+            stat='median',
+            method='column',
+        )
+    else:
+        print('No bad column blocks identified.')
+
+        # send image back in detector format
+    return obs_image.transpose(1, 0, 2)

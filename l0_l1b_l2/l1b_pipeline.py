@@ -40,16 +40,17 @@ def make_dark_std_backplane(moonager: PipeManager):
 
     # filter seams don't show up in darks, but bc the real values get removed
     # in the obs, we also interpolate.
-    # dark_std = filter_seam_interpolation(
-    #     obs_data=dark_std,
-    #     channels=moonager.filter_seam_rows
-    # )
+    dark_std = filter_seam_interpolation(
+        obs_data=dark_std,
+        channels=moonager.filter_seam_rows
+    )
+
     rdn_cal = load_rdn_cal(moonager.rdn_cal_path)
     dark_std = dark_std * rdn_cal[:, np.newaxis]
     dark_std = dark_std[
-                np.max(moonager.omitted_channels) + 1:,
-                moonager.left_col_cutoff:moonager.right_col_cutoff
-                ]
+               np.max(moonager.omitted_channels) + 1:,
+               moonager.left_col_cutoff:moonager.right_col_cutoff
+               ]
     ssc_factors = load_ssc_factors(moonager.ssc_path)
     dark_std = dark_std * ssc_factors[:, np.newaxis]
 
@@ -245,13 +246,12 @@ def run_l1b_new_pipeline(moonager: PipeManager):
     """
     from l0_l1b_l2.l1b_utils.loader import load_fits_into_frame
     from l0_l1b_l2.l1b_utils.dark_obs import make_dark_signal_image, \
-        experimental_dark_pedestal_correction, \
         illumination_based_dark_pedestal_correction
     from l0_l1b_l2.l1b_utils.electronic_ghost import ghost_correction
     from l0_l1b_l2.l1b_utils.mission_bde import bde_correction, \
         detector_array_tap_interpolation
     from l0_l1b_l2.l1b_utils.new_flat import get_relative_gain_flat, \
-        variable_column_correction
+        fix_variable_columns
     from l0_l1b_l2.l1b_utils.radiometric_calibration import load_rdn_cal
 
     obs_image = load_fits_into_frame(moonager.l0_obs_path)
@@ -267,12 +267,6 @@ def run_l1b_new_pipeline(moonager: PipeManager):
     obs_image -= dark_signal_image
 
     # # Dark Pedestal Shift Correction
-    # obs_image = experimental_dark_pedestal_correction(
-    #     obs_image=obs_image,
-    #     dark_path=moonager.dark_path,
-    #     dark_cols=moonager.dark_cols,
-    #     bde_path=moonager.flag_path,
-    # )
     obs_image = illumination_based_dark_pedestal_correction(
         obs_image=obs_image,
         left_cutoff_col=moonager.left_col_cutoff,
@@ -303,10 +297,10 @@ def run_l1b_new_pipeline(moonager: PipeManager):
     # (time-variable organized flashing of background columns
     # is not good for any kind of flat based on full obs length
     # averages)
-    # obs_image = variable_column_correction(
-    #     obs_data=np.median(obs_image.transpose(1,0,2), axis=0),
-    #     col_groups=moonager.bad_column_groups,
-    # )
+    obs_image = fix_variable_columns(
+        obs_image=obs_image.transpose(1, 0, 2),
+        col_groups=moonager.bad_column_groups,
+    )
 
     # Scattered Light Correction
     # not implemented
