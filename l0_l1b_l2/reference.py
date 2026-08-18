@@ -242,6 +242,12 @@ class PipeManager:
             self.filter_seam_rows = [12, 49]
             # for L2
             self.degraded_channels = [0, 1]
+            # bad /variable column groups (1 indexed)
+            self.bad_column_groups = {
+                'group1': [310, 278, 246, 230, 198, 166, 150, 118, 86, 70, 38,
+                           6],
+                'group2': [294, 262, 214, 182, 134, 102, 54, 22],
+            }
 
         # L1B -> L2 related calibration files
         # some of these are both mode and time / date dependant

@@ -250,7 +250,8 @@ def run_l1b_new_pipeline(moonager: PipeManager):
     from l0_l1b_l2.l1b_utils.electronic_ghost import ghost_correction
     from l0_l1b_l2.l1b_utils.mission_bde import bde_correction, \
         detector_array_tap_interpolation
-    from l0_l1b_l2.l1b_utils.new_flat import get_relative_gain_flat
+    from l0_l1b_l2.l1b_utils.new_flat import get_relative_gain_flat, \
+        variable_column_correction
     from l0_l1b_l2.l1b_utils.radiometric_calibration import load_rdn_cal
 
     obs_image = load_fits_into_frame(moonager.l0_obs_path)
@@ -297,6 +298,15 @@ def run_l1b_new_pipeline(moonager: PipeManager):
         obs_data=obs_image,
         cols=moonager.read_out_cols,
     )
+
+    # Variable column group correction
+    # (time-variable organized flashing of background columns
+    # is not good for any kind of flat based on full obs length
+    # averages)
+    # obs_image = variable_column_correction(
+    #     obs_data=np.median(obs_image.transpose(1,0,2), axis=0),
+    #     col_groups=moonager.bad_column_groups,
+    # )
 
     # Scattered Light Correction
     # not implemented

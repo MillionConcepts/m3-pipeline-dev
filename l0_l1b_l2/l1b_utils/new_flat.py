@@ -89,9 +89,9 @@ def make_relative_gain_flat(
         median_log_ratio = np.nan_to_num(median_log_ratio, nan=0.0)
 
         combined_gains = np.concatenate((
-                [0.0],
-                np.cumsum(median_log_ratio)
-            ))
+            [0.0],
+            np.cumsum(median_log_ratio)
+        ))
 
         # normalize to median gain of 1
         combined_gains -= np.median(combined_gains)
@@ -130,6 +130,208 @@ def get_relative_gain_flat(obs_image: np.ndarray, moonager) -> np.ndarray:
     #     min_valid_frac=0.5,
     # )
 
-    #return ((1.0 / flat_1) + flat_2) / 2.0
+    # return ((1.0 / flat_1) + flat_2) / 2.0
 
     return 1.0 / flat_1
+
+
+def variable_column_correction(
+        obs_data: np.ndarray,
+        col_groups: dict,
+        comp_window=4,
+        min_offset=.8,
+        max_offset=10.0,
+        min_cols_frac=0.6,
+        offset_type="auto",
+        max_gap=5,
+        min_block_size=20,
+        end_threshold=1.0,
+        end_window=2,
+) -> np.ndarray:
+    """
+    Some evenly spaced groups of columns (typically separated by 16, 32, or 48
+    pixels in global mode) are simultaneously higher or lower during an
+    observation. They do not get flagged using the dark signal observations
+    because their on / off flickering is usually 200-800 lines long. Dark
+    observations are around 260 lines long.
+
+    All columns in a group simultaneously increase or decrease at the same line
+    and are 1-4 DN higher than neighboring columns across all bands (sometimes
+    more at higher bands).
+
+    Returns dictionary with all blocks of relatively high or low col behavior.
+
+    Args:
+        obs_data: Median across bands of full observation, could be in DN or
+            radiance. Must be dark signal subtracted otherwise the results will
+            be dominated by dark signal.
+        #TODO: is sum or mean better than median? could do band by band but
+            #noisier then
+        col_groups: Dictionary with lists of columns.
+        comp_window: Which neighboring columns to compare bad col values to.
+        min_offset: Minimum offset with neighboring columns to be considered
+            a bump or dip.
+        max_offset: Maximum offset with neighboring columns to be considered
+            a bump or dip.
+        min_cols_frac: What % of cols in the group must fit the criteria for
+            bump or dip for it be considered a "block"
+        offset_type: Designate if we are looking for drops, bumps or either.
+            String.
+        max_gap: How many lines can we skip within a block before it's not a
+            block anymore? Most useful in a highly variable terrain context.
+        min_block_size: Minimum number of lines in a block.
+        end_threshold: Change in DN within a column to designate end of block.
+            NOT relative to neighboring columns.
+        end_window: Area within which the end could occur for all group cols.
+    """
+    n_lines, n_cols = obs_data.shape
+
+    block_results = {}
+
+    for group_name, indices in col_groups.items():
+        # unlikely but in case of empty groups
+        if not indices:
+            block_results[group_name] = {}
+            continue
+
+        # cols within a group are 1 indexed bc that's how they are in ds9
+        cols = np.array(indices) - 1
+
+        if isinstance(offset_type, str):
+            offset_types = [offset_type] * len(cols)
+        else:
+            offset_types = offset_type
+
+        # positive = drop (neighbors cols higher than col)
+        # negative = bump (neighboring cols lower than col)
+        offsets = np.full((n_lines, len(cols)), np.nan)
+
+        for j, c in enumerate(cols):
+            lo = max(c - comp_window, 0)
+            hi = min(c + comp_window + 1, n_cols)
+            neighbor_cols = [k for k in range(lo, hi) if k != c]
+            # mean or median? median meaningless if it's two cols
+            neighbor_mean = obs_data[:, neighbor_cols].mean(axis=1)
+            target_val = obs_data[:, c]
+            offsets[:, j] = neighbor_mean - target_val
+
+        # vectorize?
+        matches = np.zeros_like(offsets, dtype=bool)
+        for j, d in enumerate(offset_types):
+            col_dev = offsets[:, j]
+            mag = np.abs(col_dev)
+            in_range = (mag >= min_offset) & (mag <= max_offset)
+
+            # we do know some cols tend to be higher rather than lower but
+            # IDK if that's 100% true all the time
+            if d == "drop":
+                sign_ok = col_dev > 0
+            elif d == "bump":
+                sign_ok = col_dev < 0
+            elif d == "auto":
+                sign_ok = np.ones_like(col_dev, dtype=bool)
+            else:
+                raise ValueError(
+                    f"invalid dir type '{d}'")
+
+            matches[:, j] = in_range & sign_ok
+
+        match_fraction = matches.mean(axis=1)
+        line_flags = match_fraction >= min_cols_frac
+
+        flagged_idx = np.where(line_flags)[0]
+        if len(flagged_idx) == 0:
+            block_results[group_name] = {}
+            continue
+
+        magnitude_matrix = np.abs(offsets)
+
+        raw_blocks = []
+        block_start = flagged_idx[0]
+        prev = flagged_idx[0]
+        for idx in flagged_idx[1:]:
+            if idx - prev > max_gap:
+                raw_blocks.append((block_start, prev))
+                block_start = idx
+            prev = idx
+        raw_blocks.append((block_start, prev))
+
+        # look for where the DN suddenly changes across all cols (within the
+        # cols themselves, not relative to neighbors)
+        delta = np.abs(
+            magnitude_matrix[end_window:, :] - magnitude_matrix[:-end_window,
+                                               :])
+        cols_jumped_frac = np.mean(delta >= end_threshold, axis=1)
+        cols_jumped_frac = np.concatenate(
+            [np.zeros(end_window), cols_jumped_frac])
+        split_points = set(np.where(cols_jumped_frac >= min_cols_frac)[0])
+
+        final_ranges = []
+        for (s, e) in raw_blocks:
+            seg_start = s
+            for line in range(s + 1, e + 1):
+                if line in split_points:
+                    final_ranges.append((seg_start, line - 1))
+                    seg_start = line
+            final_ranges.append((seg_start, e))
+
+        final_ranges = [(s, e) for s, e in final_ranges if
+                        (e - s + 1) >= min_block_size]
+
+        group_result = {}
+        for i, (s, e) in enumerate(final_ranges):
+            seg = offsets[s:e + 1, :]
+
+            mean_per_col = np.nanmean(seg, axis=0)
+            median_per_col = np.nanmedian(seg, axis=0)
+
+            # get offset_types per column
+            offset_per_col = {}
+            for j, idx in enumerate(indices):
+                col_vals = seg[:, j]
+                col_vals = col_vals[~np.isnan(col_vals)]
+                n_drop = np.sum(col_vals > 0)
+                n_bump = np.sum(col_vals < 0)
+                if len(col_vals) == 0:
+                    offset_per_col[idx] = "unknown"
+                elif n_drop > 0 and n_bump > 0:
+                    offset_per_col[idx] = "mixed"
+                elif n_drop > 0:
+                    offset_per_col[idx] = "drop"
+                else:
+                    offset_per_col[idx] = "bump"
+
+            # determine offset_type for the whole block
+            # may only need this, not to determine it per col. eventually.
+            # although for now it's useful.
+            flat_vals = seg.flatten()
+            flat_vals = flat_vals[~np.isnan(flat_vals)]
+            n_drop_block = np.sum(flat_vals > 0)
+            n_bump_block = np.sum(flat_vals < 0)
+            if len(flat_vals) == 0:
+                offset_block = "unknown"
+            elif n_drop_block > 0 and n_bump_block > 0:
+                offset_block = "mixed"
+            elif n_drop_block > 0:
+                offset_block = "drop"
+            else:
+                offset_block = "bump"
+
+            group_result[i] = {
+                "start_line": s,
+                "end_line": e,
+                "n_lines": e - s + 1,
+                "mean_deviation_per_column": {idx: mean_per_col[j] for
+                                              j, idx in enumerate(indices)},
+                "median_deviation_per_column": {idx: median_per_col[j]
+                                                for j, idx in
+                                                enumerate(indices)},
+                "offset_type_per_col": offset_per_col,
+                "mean_deviation_block": np.nanmean(seg),
+                "median_deviation_block": np.nanmedian(seg),
+                "offset_type_block": offset_block,
+            }
+
+        block_results[group_name] = group_result
+
+    return block_results
