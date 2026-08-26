@@ -1,6 +1,34 @@
 import numpy as np
 
 
+def basic_kernel_scattered_light_corr(
+        obs_band: np.ndarray,
+        sl_ratio: float,
+        sigma: int = 6,
+):
+    """
+    Gaussian kernel applied per line per channel, scaled by the scattered light
+    ratio per channel. Resulting image then scaled to retain removed scattered
+    signal in peak areas.
+
+    Args:
+        obs_band: Obs image data, per channel.
+        sl_ratio: Percent observed signal that is scattered light, based on
+            signal in vignetted columns vs observing columns. We could evaluate
+            this per line? But right now it's a set value for each band.
+        sigma: Sigma for Gaussian kernel.
+    """
+    from scipy.ndimage import gaussian_filter1d
+
+    # to take the image back to all signal retained after sl subtraction
+    norm_factor = 1.0 / (1.0 - sl_ratio)
+    scatter = gaussian_filter1d(obs_band, sigma=sigma, axis=1)
+    background = sl_ratio * scatter
+    obs_band = (obs_band - background) * norm_factor
+
+    return obs_band
+
+
 def basic_scattered_light_corr(
         obs_image: np.ndarray,
         left_cols: list,
@@ -34,7 +62,7 @@ def basic_scattered_light_corr(
         median_light = np.median(frame[:, all_cols], axis=1)
 
         # extra buffer just in case
-        median_center = np.median(frame[:, start_col+2:end_col-2])
+        median_center = np.median(frame[:, start_col + 2:end_col - 2])
 
         ratios = median_light / median_center
 
@@ -44,19 +72,17 @@ def basic_scattered_light_corr(
                                                      :,
                                                      start_col:end_col
                                                      ]
-    from astropy.io import fits
-
-    fits.writeto(
-        f"lastframe_ratios_sl.fits",
-        ratios[:, np.newaxis] * \
-        obs_image[
-        frame_ix,
-        :,
-        start_col:end_col
-        ],
-        overwrite=True
-    )
-
+    # from astropy.io import fits
+    # fits.writeto(
+    #     f"lastframe_ratios_sl.fits",
+    #     ratios[:, np.newaxis] * \
+    #     obs_image[
+    #     frame_ix,
+    #     :,
+    #     start_col:end_col
+    #     ],
+    #     overwrite=True
+    # )
 
     return obs_image
 
@@ -137,4 +163,3 @@ def basic_scattered_light_corr(
 #         mean_light = np.median(frame[:, all_cols], axis=1)
 #         obs_image[frame_ix, :, start_col:end_col] += mean_light[:, np.newaxis]
 #     return obs_image
-
