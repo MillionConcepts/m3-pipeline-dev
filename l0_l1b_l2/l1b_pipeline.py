@@ -72,7 +72,7 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
     from l0_l1b_l2.l1b_utils.mission_flat import apply_flat
     from l0_l1b_l2.l1b_utils.smooth_shape import load_ssc_factors
     from l0_l1b_l2.l1b_utils.radiometric_calibration import load_rdn_cal
-    from l0_l1b_l2.l1b_utils.scattered_light import basic_scattered_light_corr
+    from l0_l1b_l2.l1b_utils.scattered_light import apply_scattered_light_corr
     from l0_l1b_l2.reference import check_l1b_label
 
     obs_image = load_fits_into_frame(moonager.l0_obs_path)
@@ -154,11 +154,10 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
     # (7) Scattered Light Correction
     if moonager.verbose:
         print("Applying scattered light correction.")
-    obs_image = basic_scattered_light_corr(
-        obs_image=obs_image,
-        left_cols=moonager.vignetted_cols_left,
-        right_cols=moonager.vignetted_cols_right,
-        all_cols=moonager.vignetted_cols,
+    obs_image = apply_scattered_light_corr(
+        obs_image=obs_image.tranpose(1, 0, 2),
+        obs_type=moonager.mode,
+        sl_ratio_corr=True,
     )
     if moonager.save_steps:
         fits.writeto(
@@ -253,6 +252,7 @@ def run_l1b_new_pipeline(moonager: PipeManager):
     from l0_l1b_l2.l1b_utils.new_flat import get_relative_gain_flat, \
         fix_variable_columns
     from l0_l1b_l2.l1b_utils.radiometric_calibration import load_rdn_cal
+    from l0_l1b_l2.l1b_utils.scattered_light import apply_scattered_light_corr
 
     obs_image = load_fits_into_frame(moonager.l0_obs_path)
 
@@ -303,7 +303,11 @@ def run_l1b_new_pipeline(moonager: PipeManager):
     )
 
     # Scattered Light Correction
-    # not implemented
+    obs_image = apply_scattered_light_corr(
+        obs_image=obs_image.tranpose(1, 0, 2),
+        obs_type=moonager.mode,
+        sl_ratio_corr=True,
+    )
 
     # New flat
     flat = get_relative_gain_flat(
