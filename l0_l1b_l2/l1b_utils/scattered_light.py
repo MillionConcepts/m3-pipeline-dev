@@ -64,6 +64,7 @@ def apply_scattered_light_corr(
         obs_image: np.ndarray,
         obs_type: str,
         sl_ratio_corr: bool = True,
+        sigma: float = 6.0
 ):
     """
     Apply gauss kernel scattered light correction per band with correct
@@ -78,6 +79,7 @@ def apply_scattered_light_corr(
         sl_ratio_corr: True / False if we want to replace negative correction
             factors with 0. I don't think we should really have these in the
             future but for now we do this.
+        sigma: Sigma for Gaussian kernel.
     """
     bands = obs_image.shape[0]
 
@@ -100,6 +102,7 @@ def apply_scattered_light_corr(
         obs_image[band, :, :] = basic_kernel_scattered_light_corr(
             obs_band=obs_image[band, :, :],
             sl_ratio=sl_ratio,
+            sigma=sigma,
         )
     return obs_image
 
@@ -107,7 +110,7 @@ def apply_scattered_light_corr(
 def basic_kernel_scattered_light_corr(
         obs_band: np.ndarray,
         sl_ratio: float,
-        sigma: int = 6,
+        sigma: float = 6.0,
 ):
     """
     Gaussian kernel applied per line per channel, scaled by the scattered light

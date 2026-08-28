@@ -155,7 +155,7 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
     if moonager.verbose:
         print("Applying scattered light correction.")
     obs_image = apply_scattered_light_corr(
-        obs_image=obs_image.tranpose(1, 0, 2),
+        obs_image=obs_image.transpose(1, 0, 2),
         obs_type=moonager.mode,
         sl_ratio_corr=True,
     )
@@ -307,6 +307,7 @@ def run_l1b_new_pipeline(moonager: PipeManager):
         obs_image=obs_image.tranpose(1, 0, 2),
         obs_type=moonager.mode,
         sl_ratio_corr=True,
+        sigma=float,
     )
 
     # New flat
