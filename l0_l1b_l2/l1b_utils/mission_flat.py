@@ -33,10 +33,10 @@ def apply_flat(
             flag_path
         )
     if "lab" in str(flat_path):
-        return obs_data * flat
+        return obs_data * flat[:, np.newaxis, :]
     else:
         flat_masked = np.where(flat == 0, 1, flat)
-        return obs_data / flat_masked
+        return obs_data / flat_masked[:, np.newaxis, :]
 
 
 def fix_flagged_in_lab_flat(flat_path: Path, bde_path: Path):

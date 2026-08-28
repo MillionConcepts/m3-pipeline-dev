@@ -195,7 +195,7 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
         )
     # (10) Radiometric Calibration
     rdn_cal = load_rdn_cal(moonager.rdn_cal_path)
-    obs_image = obs_image * rdn_cal[np.newaxis, :, np.newaxis]
+    obs_image = obs_image * rdn_cal[:, np.newaxis, np.newaxis]
     if moonager.save_steps:
         fits.writeto(
             f"{moonager.obs_id}_radcal.fits",
@@ -207,13 +207,13 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
     if moonager.verbose:
         print("Trimming image samples and channels to L1B size.")
     obs_image = obs_image[
-                :,
                 np.max(moonager.omitted_channels) + 1:,
+                :,
                 moonager.left_col_cutoff:moonager.right_col_cutoff
                 ]
     # (11) Smooth Shape Correction
     ssc_factors = load_ssc_factors(moonager.ssc_path)
-    obs_image = obs_image * ssc_factors[np.newaxis, :, np.newaxis]
+    obs_image = obs_image * ssc_factors[:, np.newaxis, np.newaxis]
     # (12) Ray tracing / location
     # TODO: flip things around to the orientation used in level 2 etc.
     #   For now, we check for a relevant L1B label which gives orientation info
@@ -224,7 +224,7 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
     reverse_lines, reverse_samples = check_l1b_label(moonager.l1b_label)
 
     if reverse_lines:
-        obs_image = obs_image[::-1, :, :]
+        obs_image = obs_image[:, ::-1, :]
     if reverse_samples:
         obs_image = obs_image[:, :, ::-1]
 
