@@ -237,14 +237,24 @@ def build_bad_col_map(
     _, bands, cols = obs_image.shape
     flag_map = np.zeros((bands, cols), dtype=int)
     for band in range(bands):
-        indices = flag_whole_cols(
+        indices, ratios = flag_whole_cols(
             obs_image[:, band, :],
             sigma,
             flag_col_ratio,
             band
         )
         # make an image of the resulting flag map
-        # could propagate ratios from flag_whole_cols? instead of just 0 or 1
-        # (not bool here just for easy save to fits)
-        flag_map[band, indices] = 1
+        # could propagate ratios from flag_whole_cols? instead of just 0/1/2
+
+        # adjacent flagged pixels are usually the result of one high contrast
+        # col neighboring two normal ones. we could do something more complex
+        # and expand the diff window and rerun the process, but for now
+        # merely flagging standalone and highest ratio flagged pixels as
+        # 2 ('real' bad pixels) and the neighboring pixels as 1 seems to
+        # suffice
+        groups = np.split(indices, np.where(np.diff(indices) != 1)[0] + 1)
+        for group in groups:
+            flag_map[band, group] = 1
+            # below means default 2 for groups of 1 pixel as a result
+            flag_map[band, group[np.argmax(ratios[group])]] = 2
     return flag_map
