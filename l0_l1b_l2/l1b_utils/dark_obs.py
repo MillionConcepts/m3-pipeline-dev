@@ -125,7 +125,7 @@ def illumination_based_dark_pedestal_correction(
     # could squeeze in further to avoid weird illuminated edges at
     # low/high bands
     pedestals = np.median(obs_image[:, :, left_cutoff_col:right_cutoff_col],
-                          axis=2) * 0.05
+                          axis=2) * 0.03
 
     # abs value the pedestal for the infrequent scenario that it is a very dark
     # section of an observation that has been over dark signal subtracted
