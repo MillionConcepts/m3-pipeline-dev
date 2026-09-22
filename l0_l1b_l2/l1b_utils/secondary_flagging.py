@@ -216,7 +216,7 @@ def flag_whole_cols(
             f"is lower than the 96th percentile pixels flagged per column, "
             f"{np.percentile(flag_ratios, 96)} for band {band}.")
     cutoff = max(flag_col_ratio, np.percentile(flag_ratios, 96))
-    return np.where(flag_ratios > cutoff)[0]
+    return np.where(flag_ratios > cutoff)[0], flag_ratios
 
 
 def build_bad_col_map(
@@ -252,9 +252,11 @@ def build_bad_col_map(
         # merely flagging standalone and highest ratio flagged pixels as
         # 2 ('real' bad pixels) and the neighboring pixels as 1 seems to
         # suffice
+        if indices.size == 0:
+            continue
         groups = np.split(indices, np.where(np.diff(indices) != 1)[0] + 1)
         for group in groups:
             flag_map[band, group] = 1
             # below means default 2 for groups of 1 pixel as a result
-            flag_map[band, group[np.argmax(ratios[group])]] = 2
+            flag_map[band, group[np.nanargmax(ratios[group])]] = 2
     return flag_map
