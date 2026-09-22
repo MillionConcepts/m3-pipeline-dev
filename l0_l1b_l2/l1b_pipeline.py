@@ -239,6 +239,87 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
     return obs_image
 
 
+def run_basic_cleanup_l0(moonager: PipeManager):
+    """
+    L0 pipeline just for cleaning up L0 data (bad elements, flatting,
+    seam interpolation, ghosts, and DSS). No pedestal, scattered light,
+    rad cal or smooth shape. Result is in DN.
+    """
+    from l0_l1b_l2.l1b_utils.loader import load_fits_into_frame
+    from l0_l1b_l2.l1b_utils.dark_obs import make_dark_signal_image
+    from l0_l1b_l2.l1b_utils.electronic_ghost import ghost_correction
+    from l0_l1b_l2.l1b_utils.mission_bde import bde_correction, \
+        detector_array_tap_interpolation, filter_seam_interpolation
+    from l0_l1b_l2.l1b_utils.mission_flat import apply_flat
+
+    obs_image = load_fits_into_frame(moonager.l0_obs_path)
+    # obs_image shape = (frames / lines, channels / bands, samples / columns)
+
+    # (1) Dark Signal Subtraction
+    if moonager.verbose:
+        print("Subtracting dark signal.")
+    obs_image -= make_dark_signal_image(
+        dark_path=moonager.dark_path,
+        dark_method='mean'
+    )
+    # (2) Bad Detector Element Correction (Flag)
+    if moonager.verbose:
+        print("Running flagged pixel correction.")
+    obs_image = bde_correction(
+        obs_data=obs_image,
+        bde_path=moonager.flag_path,
+    )
+    # (3) Detector Tap Interpolation
+    if moonager.verbose:
+        print("Interpolating tap cols.")
+    obs_image = detector_array_tap_interpolation(
+        obs_data=obs_image,
+        cols=moonager.read_out_cols
+    )
+    # (4) Filter Seam Interpolation
+    if moonager.verbose:
+        print("Interpolating filter seams.")
+    obs_image = filter_seam_interpolation(
+        obs_data=obs_image,
+        channels=moonager.filter_seam_rows
+    )
+    # (5) Electronic Ghost Correction
+    if moonager.verbose:
+        print("Running electronic ghost correction.")
+    obs_image = ghost_correction(
+        obs_data=obs_image,
+        l0_samples=moonager.l0_samples,
+        correction_factor=moonager.ghost_corr_factor,
+    )
+    obs_image = obs_image.transpose(1,0,2)
+    # (8) Lab Flat Correction
+    if moonager.verbose:
+        print("Applying lab flat.")
+    obs_image = apply_flat(
+        obs_data=obs_image,
+        flat_path=moonager.lab_flat_path,
+        flag_path=moonager.flag_path
+    )
+    # (9) Imaging-based Flat Correction
+    if moonager.verbose:
+        print("Applying observation-level flat.")
+    obs_image = apply_flat(
+        obs_data=obs_image,
+        flat_path=moonager.obs_flat_path,
+        # flag_path=moonager.flag_path
+    )
+    # Drop first channel(s) and trim vignetted and dark columns
+    # obs_image shape = (frames / lines, channels / bands, samples / columns)
+    if moonager.verbose:
+        print("Trimming image samples and channels to L1B size.")
+    obs_image = obs_image[
+                np.max(moonager.omitted_channels) + 1:,
+                :,
+                moonager.left_col_cutoff:moonager.right_col_cutoff
+                ]
+    return obs_image
+
+
 def run_l1b_new_pipeline(moonager: PipeManager):
     """
     DPSIS with creative liberties.

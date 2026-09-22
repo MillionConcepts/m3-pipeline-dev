@@ -3,7 +3,7 @@ from typing import Literal
 
 from l0_l1b_l2.reference import PipeManager, check_observation
 from l0_l1b_l2.l1b_pipeline import run_l1b_new_pipeline, \
-    run_l1b_mission_pipeline
+    run_l1b_mission_pipeline, run_basic_cleanup_l0
 
 
 def run_pipe(
@@ -49,4 +49,7 @@ def run_pipe(
 
     elif pipe_version == 'new':
         return run_l1b_new_pipeline(moonager)
+
+    elif pipe_version == 'cleanup':
+        return run_basic_cleanup_l0(moonager)
 
