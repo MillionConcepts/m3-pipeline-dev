@@ -496,7 +496,7 @@ def run_l1b_new_pipeline(moonager: PipeManager):
         if moonager.verbose:
             print("Making flag backplane.")
         flag_backplane = make_flag_backplane(
-            moonager.bde_path,
+            moonager.flag_path,
             bad_col_group_map,
             obs_image
         )
