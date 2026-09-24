@@ -464,7 +464,7 @@ def run_l1b_new_pipeline(moonager: PipeManager):
     #     moonager=moonager,
     # )
     flat = make_flat_field_from_obs(obs_image)
-    obs_image = obs_image * flat[:, np.newaxis, :]
+    obs_image = obs_image / flat[:, np.newaxis, :]
     if moonager.verbose:
         print(f"Writing new flat to: {moonager.obs_id}_new_flat.fits.")
     fits.writeto(
