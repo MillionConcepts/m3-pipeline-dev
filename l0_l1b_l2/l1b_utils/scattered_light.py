@@ -19,6 +19,22 @@ global_sl_ratios = np.array(
      -0.0077, -0.0079, -0.008, -0.0086, -0.008, -0.0082, -0.01,
      0.0352])
 
+# global_sl_ratios = np.array(
+#     [0.4229, 0.405, 0.235, 0.1532, 0.151, 0.1502, 0.0995,
+#      0.0899, 0.071, 0.0659, 0.0556, 0.0604, 0.0571, 0.0339,
+#      0.0373, 0.0341, 0.0344, 0.0203, 0.0181, 0.0097, 0.0049,
+#      0.003, 0.0033, 0.0, 0.0033, -0.0044, -0.0051, -0.0033,
+#      -0.0024, -0.001, -0.0059, -0.0028, -0.0075, -0.0023,
+#      -0.0032, -0.003, -0.0017, -0.0017, -0.0013, -0.0032,
+#      -0.0013, -0.0003, -0.003, -0.001, 0.0008, 0.0012, 0.0,
+#      -0.0054, -0.0013, -0.0045, -0.011, -0.0115, -0.0111,
+#      -0.0116, -0.0116, -0.008, -0.0095, -0.0091, -0.0093, -0.01,
+#      -0.0102, -0.0095, -0.0083, -0.0085, -0.0088, -0.0084,
+#      -0.0079, -0.0094, -0.0108, -0.0082, -0.0096, -0.0101,
+#      -0.0088, -0.0092, -0.0096, -0.0096, -0.0102, -0.0115,
+#      -0.0077, -0.0079, -0.008, -0.0086, -0.008, -0.0082, -0.01,
+#      0.0352])
+
 target_sl_ratios = np.array(
     [0.4079, 0.3222, 0.3174, 0.2782, 0.2335, 0.2446, 0.1797,
      0.2003, 0.1725, 0.1571, 0.1264, 0.1211, 0.1102, 0.0891,
@@ -96,14 +112,14 @@ def apply_scattered_light_corr(
         )
 
     for band in range(bands):
-        sl_ratio = ratios[band]
-
-        # modify in place atm, but maybe we want to make a copy?
-        obs_image[band, :, :] = basic_kernel_scattered_light_corr(
-            obs_band=obs_image[band, :, :],
-            sl_ratio=sl_ratio,
-            sigma=sigma,
-        )
+        if ratios[band] > 0.0:
+            sl_ratio = ratios[band]
+            # modify in place atm, but maybe we want to make a copy?
+            obs_image[band, :, :] = basic_kernel_scattered_light_corr(
+                obs_band=obs_image[band, :, :],
+                sl_ratio=sl_ratio,
+                sigma=sigma,
+            )
     return obs_image
 
 
@@ -116,6 +132,9 @@ def basic_kernel_scattered_light_corr(
     Gaussian kernel applied per line per channel, scaled by the scattered light
     ratio per channel. Resulting image then scaled to retain removed scattered
     signal in peak areas.
+
+    TODO: possibly the net result should increase signal overall, not just
+        reallocate?
 
     Args:
         obs_band: Obs image data, per channel.

@@ -7,9 +7,12 @@ def load_ssc_factors(ssc_path: Path):
     temp. These were calculated by the mission.
     """
     import pandas as pd
+    import numpy as np
 
     # could combine these tables to one parquet file maybe (they're really
     # small)
-    ssc_table = pd.read_fwf(ssc_path, names=["channel", "corr_factor"])
-
+    ssc_table = pd.read_fwf(ssc_path,
+                            names=["channel", "corr_factor"],
+                            dtype={'corr_factor': np.float32},
+                            )
     return ssc_table['corr_factor'].values

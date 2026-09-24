@@ -33,8 +33,11 @@ def load_rdn_cal(rdn_cal_path: Path):
     Read in radiometric calibration shape correction factors per channel.
     """
     import pandas as pd
+    import numpy as np
 
     rdn_cal = pd.read_fwf(
         rdn_cal_path,
-        names=['channel', 'rdn_cal_coeff'])
+        names=['channel', 'rdn_cal_coeff'],
+        dtype={'rdn_cal_coeff': np.float32},
+    )
     return rdn_cal['rdn_cal_coeff'].values

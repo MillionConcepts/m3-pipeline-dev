@@ -89,7 +89,7 @@ def basic_dark_pedestal_correction(
         # don't do this
         return obs_image
     # pedestal for each frame
-    pedestals = np.median(obs_image[:, :, dark_cols], axis=(1, 2))
+    pedestals = np.nanmedian(obs_image[:, :, dark_cols], axis=(2, 1))
     obs_image = obs_image - pedestals[:, np.newaxis, np.newaxis]
 
     return obs_image
@@ -124,8 +124,9 @@ def illumination_based_dark_pedestal_correction(
     """
     # could squeeze in further to avoid weird illuminated edges at
     # low/high bands
-    pedestals = np.median(obs_image[:, :, left_cutoff_col:right_cutoff_col],
-                          axis=2) * 0.03
+    pedestals = np.nanmedian(
+        obs_image[:, :, left_cutoff_col:right_cutoff_col],
+        axis=2) * 0.03
 
     # abs value the pedestal for the infrequent scenario that it is a very dark
     # section of an observation that has been over dark signal subtracted
@@ -168,7 +169,7 @@ def experimental_dark_pedestal_correction(
     # (median of all but first 2 and last 2 frames)
     dark_signal = load_fits_into_frame(dark_path)
     exc = 2
-    dark_signal = np.median(dark_signal[exc:-exc, :, :], axis=0)
+    dark_signal = np.nanmedian(dark_signal[exc:-exc, :, :], axis=0)
 
     dark_signal = detector_array_tap_interpolation(dark_signal, tap_cols)
 
@@ -176,8 +177,8 @@ def experimental_dark_pedestal_correction(
 
     for frame in range(obs_image.shape[0]):
         for channel in range(obs_image.shape[1]):
-            ratio = np.median(obs_image[frame, channel, dark_cols]) / \
-                np.median(dark_signal[channel, dark_cols])
+            ratio = np.nanmedian(obs_image[frame, channel, dark_cols]) / \
+                np.nanmedian(dark_signal[channel, dark_cols])
 
             if np.isfinite(ratio):
                 offset = (1 - ratio) * dark_signal[channel, :]

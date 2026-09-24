@@ -106,6 +106,9 @@ def bde_correction(obs_data: np.ndarray, bde_path: Path):
     bad_mask = bde_map != 0
     n_rows, n_cols = bad_mask.shape  # 86 x 320 for global mode
 
+    assert bde_map.shape == obs_data.shape[-2:], (
+        f"BDE map {bde_map.shape} vs data {obs_data.shape}"
+    )
     # we only need to figure out the interpolation weights once for the obs
     # new_val =
     # val_at_top + (bad_row-top_row)/(bot_row-top_row)*(val_at_bot-val_at_top)

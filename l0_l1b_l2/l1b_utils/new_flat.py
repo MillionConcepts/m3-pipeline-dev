@@ -338,11 +338,12 @@ def find_variable_column_blocks(
 
 def apply_variable_column_correction(
         obs_image: np.ndarray,
+        bad_col_group_map: np.ndarray,
         block_results: dict,
         stat: Literal["median", "mean"] = "median",
         method: Literal["column", "block"] = "column",
         skip_mixed_type: bool = False,
-) -> np.ndarray:
+):
     """
     Apply the offsets found in find_variable_column_blocks to each bad col
     block. Same offset is applied to all bands of each col, optional to
@@ -352,6 +353,8 @@ def apply_variable_column_correction(
     Args:
         obs_image: Input image, in bands x lines x cols. Could be rdn / rfl or
             DN but need to change settings for anything not DN.
+        bad_col_group_map: flag map in line x col shape, all 0s. to fill with
+            block results.
         block_results: Dict of block info.
         stat: Correct the columns using either the mean or median value.
         method: "column" to correct using column-level stats within the block,
@@ -363,6 +366,10 @@ def apply_variable_column_correction(
     # correction offset amount stored in dict per block / col group
     stat_name = f"{stat}_offset_per_col" if method == "column" \
         else f"{stat}_offset_block "
+
+    # make a map (applies to all bands) to add to flag map later
+    # could use this in lieu of block dict, but then we wouldn't retain col
+    # stats
 
     for group_name, blocks in block_results.items():
 
@@ -384,24 +391,26 @@ def apply_variable_column_correction(
                     continue
                 if skip_mixed_type and block["offset_type_block"] in (
                         "mixed", "unknown"):
-                    # skipping whole block
+                    # skipping whole block, no flag in bad_col_group_map
                     continue
                 for col_idx in types_per_col.keys():
                     c = col_idx - 1
                     obs_image[:, s:e, c] += offset_vals
+                    bad_col_group_map[s:e, c] = 1
 
             elif method == "column":
                 for col_idx, offset in offset_vals.items():
                     if skip_mixed_type and types_per_col.get(col_idx) in (
                             "mixed", "unknown"):
-                        # skipping col
+                        # skipping col, no flag in bad_col_group_map
                         continue
                     if np.isnan(offset):
                         continue
                     c = col_idx - 1
                     obs_image[:, s:e, c] += offset
+                    bad_col_group_map[s:e, c] = 1
 
-    return obs_image
+    return obs_image, bad_col_group_map
 
 
 def fix_variable_columns(obs_image: np.ndarray, col_groups: dict):
@@ -424,10 +433,14 @@ def fix_variable_columns(obs_image: np.ndarray, col_groups: dict):
         col_groups
     )
 
+    _, n_lines, n_samples = obs_image.shape
+    bad_col_group_map = np.zeros((n_lines, n_samples), dtype=np.uint8)
+
     if any(block_results.values()):
         # only run fix if there's something to fix
-        obs_image = apply_variable_column_correction(
+        obs_image, bad_col_group_map = apply_variable_column_correction(
             obs_image,
+            bad_col_group_map,
             block_results,
             stat='median',
             method='column',
@@ -436,4 +449,4 @@ def fix_variable_columns(obs_image: np.ndarray, col_groups: dict):
         print('No bad column blocks identified.')
 
         # send image back in detector format
-    return obs_image.transpose(1, 0, 2)
+    return obs_image.transpose(1, 0, 2), bad_col_group_map

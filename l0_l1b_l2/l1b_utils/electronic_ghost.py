@@ -37,7 +37,9 @@ def ghost_correction(
 
     panel_width = l0_samples // 4  # 80 for 320 etc
 
-    frame = obs_data.copy()
+    # frame = obs_data.copy()
+    # deal with nans from negative pixels
+    frame = np.nan_to_num(obs_data, nan=0.0)
 
     # don't use dark vals if we pass dark cols
     # for correction bc they aren't dark subtracted
