@@ -5,6 +5,9 @@ import numpy as np
 from l0_l1b_l2.reference import PipeManager
 
 
+#TODO: add ndarray shape checks for every single cal function so they can be
+#   mixed and matched easier
+
 def run_l1b_mission_pipeline(moonager: PipeManager):
     """
     L0 to L1B Pipeline based on an originalist reading of the DPSIS.

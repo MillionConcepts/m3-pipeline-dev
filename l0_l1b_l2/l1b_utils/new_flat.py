@@ -367,10 +367,6 @@ def apply_variable_column_correction(
     stat_name = f"{stat}_offset_per_col" if method == "column" \
         else f"{stat}_offset_block "
 
-    # make a map (applies to all bands) to add to flag map later
-    # could use this in lieu of block dict, but then we wouldn't retain col
-    # stats
-
     for group_name, blocks in block_results.items():
 
         if not blocks:
@@ -392,6 +388,8 @@ def apply_variable_column_correction(
                 if skip_mixed_type and block["offset_type_block"] in (
                         "mixed", "unknown"):
                     # skipping whole block, no flag in bad_col_group_map
+                    # TODO: change this to flag even if not fixed? mixed is
+                    #   occurs more in high variability terrain
                     continue
                 for col_idx in types_per_col.keys():
                     c = col_idx - 1
@@ -428,11 +426,16 @@ def fix_variable_columns(obs_image: np.ndarray, col_groups: dict):
         col_groups: Dictionary with lists of bad columns.
     """
 
+    # first 15 bands to prevent super high signal at higher bands washing them
+    # out
     block_results = find_variable_column_blocks(
         np.mean(obs_image[:15, :, :], axis=0),
         col_groups
     )
 
+    # make a map (applies to all bands) to add to flag map later
+    # could use this in lieu of block dict, but then we wouldn't retain col
+    # stats
     _, n_lines, n_samples = obs_image.shape
     bad_col_group_map = np.zeros((n_lines, n_samples), dtype=np.uint8)
 

@@ -33,6 +33,11 @@ def make_dark_signal_image(
     if lines <= 4:
         print("This dark signal obs is probably too short to be useful.")
 
+
+    # TODO: add variable column group flagging as we do for the whole obs &
+    #   apply offset. may need to subtract min or median from dark or use std
+    #   (but then wouldn't flag if whole dark obs is with cols on).
+
     # exclude first and last two frames bc they can be funky. this number
     # could increase tbh but haven't done extensive investigation
     exc = 1
@@ -56,6 +61,26 @@ def make_dark_signal_image(
 
     return dark_signal
 
+
+# Ideas at the moment:
+# Currently I think our best bet is to treat the dark pedestal effect as some
+# percentage of the illuminated line / band median value. So this will vary
+# appropriately with the terrain and band. Something between 3-5% seems
+# appropriate based on looking at pedestal offsets divided by median per line.
+# Possibly it would be a good idea to scale a dark signal image by 3-5% and
+# add that back? I need to determine if we should use the last “cold” dark
+# signal vs the closest in temp.
+# Last cold dark signal would probably be around 147 K. Even in the cooler
+# darks, they range by 10-30 DN across the array. So 3% of that would
+# Could try testing mean neg / neg count divided by the 4 sectors of the array
+# (read out columns etc), aka seeing if the 4 bright / dark areas in the dark
+# are reflected in dark pedestal
+# This method reduces the increase in noise in the few dark signal column
+# pixels we have per band. They get very noisy / messy at high temperatures,
+# and we don’t want to propagate that noise into the image.
+# Alternatively, we could try to fit a smoother curve across the dark pedestal
+# data per dark column set per band / line. However, at warmer temperatures
+# the data gets so messy and jagged I don’t know if this is a good idea.
 
 def basic_dark_pedestal_correction(
         obs_image: np.ndarray,
@@ -89,6 +114,8 @@ def basic_dark_pedestal_correction(
         # don't do this
         return obs_image
     # pedestal for each frame
+    # TODO: add setting to switch between per frame and band vs one value per
+    #    frame, they both work approx equally wrong vs og l1b
     pedestals = np.nanmedian(obs_image[:, :, dark_cols], axis=(2, 1))
     obs_image = obs_image - pedestals[:, np.newaxis, np.newaxis]
 
