@@ -2,6 +2,7 @@ from astropy.io import fits
 from pathlib import Path
 import numpy as np
 from typing import Optional
+from l0_l1b_l2.reference import check_shape
 
 
 def load_flats(flat_path: Path):
@@ -15,12 +16,12 @@ def load_flats(flat_path: Path):
 
 
 def apply_flat(
-        obs_data: np.ndarray,
+        obs_image: np.ndarray,
         flat_path: Path,
         flag_path: Optional[Path] = None
 ):
     """
-    Load and multiple flat by image. Modify flat for flagged elements
+    Load and multiply or divide flat by image. Modify flat for flagged elements
     in the BDE if flag_path is given.
     """
     if flag_path is None:
@@ -31,12 +32,14 @@ def apply_flat(
             flag_path
         )
 
+    check_shape(obs_image.shape, flat.shape, 'flat fielding')
+
     if "lab" in flat_path.name:
-        return obs_data * flat[:, np.newaxis, :]
+        return obs_image * flat[np.newaxis, :, :]
     else:
         flat_masked = flat.copy()
         flat_masked[flat_masked == 0] = 1
-        return obs_data / flat_masked[:, np.newaxis, :]
+        return obs_image / flat_masked[np.newaxis, :, :]
 
 
 def fix_flagged_in_lab_flat(flat_path: Path, bde_path: Path):
@@ -193,7 +196,7 @@ def make_flat_field_from_obs(obs_image: np.ndarray, n_center=40) -> np.ndarray:
 
     # 1) average data & normalize
     # obs image has shape band, line, sample
-    #TODO: consider using only beginning or end of warm, long obs?
+    # TODO: consider using only beginning or end of warm, long obs?
     line_average = np.nanmean(obs_image, axis=1)
     flat = normalize_to_center(line_average, n_center)
 

@@ -20,6 +20,7 @@ features as noted above.
 """
 from typing import Literal
 import numpy as np
+from l0_l1b_l2.reference import check_shape
 
 
 def make_relative_gain_flat(

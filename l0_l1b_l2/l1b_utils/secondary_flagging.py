@@ -2,6 +2,7 @@ import numpy as np
 # import warnings
 # from scipy import signal
 # from scipy.ndimage import label
+from l0_l1b_l2.reference import check_shape
 from typing import Literal
 
 # Functions below copied from Million Concept's Moonbow project
@@ -237,11 +238,11 @@ def build_bad_col_map(
         flag_col_ratio: What ratio of pixels in a col should be flagged before
             the col is flagged.
     """
-    bands, _, cols = obs_image.shape
+    _, bands, cols = obs_image.shape
     flag_map = np.zeros((bands, cols), dtype=int)
     for band in range(bands):
         indices, ratios = flag_whole_cols(
-            obs_image[band, :, :],
+            obs_image[:, band, :],
             sigma,
             flag_col_ratio,
             band

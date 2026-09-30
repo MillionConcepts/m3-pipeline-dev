@@ -1,5 +1,5 @@
 import numpy as np
-from l0_l1b_l2.reference import PipeManager
+from l0_l1b_l2.reference import PipeManager, check_shape
 from pathlib import Path
 
 
@@ -96,14 +96,14 @@ def make_flag_backplane(
     # bit 1: interpolated pixel in BDE map
     # bde map shape bands, samples
     bde_map = np.asarray(load_fits_into_frame(Path(flag_path)))
-    flags |= _bit(bde_map > 0, bde)[:, np.newaxis, :]
+    flags |= _bit(bde_map > 0, bde)[np.newaxis, :, :]
 
     # bit 2: variable column block
     # bad col group map shape lines, samples
-    flags |= _bit(bad_col_group_map > 0, block_col)[np.newaxis, :, :]
+    flags |= _bit(bad_col_group_map > 0, block_col)[:, np.newaxis, :]
     # bit 3: bad columns (ie bad flat or missed bright / dark pixel)
-    # bad cols shape lines, samples
+    # bad cols shape band, samples
     bad_cols = np.asarray(build_bad_col_map(obs_image))
-    flags |= _bit(bad_cols > 1, bad_col)[:, np.newaxis, :]
+    flags |= _bit(bad_cols > 1, bad_col)[np.newaxis, :, :]
 
     return flags

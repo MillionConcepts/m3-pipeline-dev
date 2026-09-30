@@ -121,12 +121,14 @@ class PipeManager:
                  metadata: dict,
                  save_steps: bool = False,
                  backplanes: bool = False,
+                 smooth_shape: bool = False,
                  verbose: bool = True,
                  ):
         # pipeline config
         self.save_steps = save_steps
         self.backplanes = backplanes
         self.verbose = verbose
+        self.smooth_shape = smooth_shape
         self.local_root = Path(local_root)
 
         # for intermediate image cropping (if you want to quality check
@@ -313,10 +315,34 @@ def check_l1b_label(l1b_path: str):
 
     yaw = params['chan1:spacecraft_yaw_direction'].lower()
     limb = params['chan1:orbit_limb_direction'].lower()
-    print(yaw)
-    print(limb)
     reverse_lines = (limb == "ascending")
     reverse_samples = (limb == "descending" and yaw == "reverse") or \
                       (limb == "ascending" and yaw == "forward")
 
     return reverse_lines, reverse_samples
+
+
+class MismatchShapeError(ValueError):
+    pass
+
+
+def check_shape(shape, ref, cal_name="cal arr"):
+    """
+    Check that cal file and obs image array axis match in shape / orientation.
+    Raise MismatchShapeError if not.
+
+    Can pass arrays themselves or their shapes.
+    """
+    shape = tuple(getattr(shape, "shape", shape))
+    ref = tuple(getattr(ref, "shape", ref))
+    for s, label in ((shape, "obs_image"), (ref, cal_name)):
+        if len(s) not in (2, 3):
+            raise MismatchShapeError(f"For {label}: expected 2D or 3D, "
+                                     f"got {len(s)}D {s}")
+    if shape[-2:] != ref[-2:]:
+        msg = (f"During {cal_name}: obs image axes {shape[-2:]} "
+               f"don't match cal array {ref[-2:]} "
+               f"(full shapes {shape} vs {ref})")
+        if shape[-2:] == ref[-2:][::-1]:
+            msg += " — it looks transposed, check the axes orientation"
+        raise MismatchShapeError(msg)

@@ -1,12 +1,13 @@
 import numpy as np
 from pathlib import Path
 from typing import Literal
+from l0_l1b_l2.reference import check_shape
 
 
 def make_dark_signal_image(
         dark_path: Path,
         dark_cols: list = None,
-        dark_method: Literal['mean', 'median', 'std', 'max'] = 'median'
+        dark_method: Literal['mean', 'median', 'std', 'max', 'lowband'] = 'median'
 ) -> np.ndarray:
     """
     The dark signal of an observation is estimated from a dark signal
@@ -28,11 +29,9 @@ def make_dark_signal_image(
     dark_obs_data = load_fits_into_frame(dark_path)
     # check everything looks normal (it should)
     # row = frames = detector pov etc
-    bands, lines, cols = dark_obs_data.shape
-
+    lines, bands, cols = dark_obs_data.shape
     if lines <= 4:
         print("This dark signal obs is probably too short to be useful.")
-
 
     # TODO: add variable column group flagging as we do for the whole obs &
     #   apply offset. may need to subtract min or median from dark or use std
@@ -50,6 +49,11 @@ def make_dark_signal_image(
         dark_signal = np.std(dark_obs_data[exc:-exc, :, :], axis=0)
     elif dark_method.lower() == 'max':
         dark_signal = np.max(dark_obs_data[exc:-exc, :, :], axis=0)
+    elif dark_method.lower() == 'lowband':
+        #     lines, bands, cols = dark_obs_data.shape
+        dark_signal = np.median(dark_obs_data[exc:-exc, 3:9, :],
+                                axis=(0, 1))
+        dark_signal = np.broadcast_to(dark_signal, (bands, cols))
     else:
         # IDK why we would use this yet
         return dark_obs_data
@@ -110,14 +114,18 @@ def basic_dark_pedestal_correction(
         dark_cols: Columns used for estimating dark signal during an
             observation (they receive no light).
     """
+    # line, band, col
     if dark_cols is None:
         # don't do this
         return obs_image
     # pedestal for each frame
     # TODO: add setting to switch between per frame and band vs one value per
     #    frame, they both work approx equally wrong vs og l1b
-    pedestals = np.nanmedian(obs_image[:, :, dark_cols], axis=(2, 1))
-    obs_image = obs_image - pedestals[:, np.newaxis, np.newaxis]
+    pedestals = np.nanmedian(obs_image[:, :, dark_cols], axis=2)
+
+    check_shape(obs_image.shape[:2], pedestals.shape, 'dark pedestal')
+
+    obs_image = obs_image - pedestals[:, :, np.newaxis]
 
     return obs_image
 
@@ -154,6 +162,8 @@ def illumination_based_dark_pedestal_correction(
     pedestals = np.nanmedian(
         obs_image[:, :, left_cutoff_col:right_cutoff_col],
         axis=2) * 0.03
+
+    check_shape(obs_image.shape[:2], pedestals.shape, 'dark pedestal')
 
     # abs value the pedestal for the infrequent scenario that it is a very dark
     # section of an observation that has been over dark signal subtracted

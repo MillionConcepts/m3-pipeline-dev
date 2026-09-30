@@ -1,4 +1,5 @@
 import numpy as np
+from l0_l1b_l2.reference import check_shape
 
 # ratios derived from median of sl ratios from multiple observations where
 # sl ratio is left sl column divided by median illumination in detector center
@@ -97,10 +98,16 @@ def apply_scattered_light_corr(
             future but for now we do this.
         sigma: Sigma for Gaussian kernel.
     """
-    bands = obs_image.shape[0]
 
     ratios = global_sl_ratios.copy() if obs_type.upper() == 'G' \
         else target_sl_ratios.copy()
+
+    check_shape(obs_image.shape,
+                (len(ratios), obs_image.shape[-1]),
+                "SL ratios")
+
+    bands = obs_image.shape[1]
+
     if sl_ratio_corr:
         # no reason the correction ratio should ever be negative
         ratios[ratios < 0.0] = 0.0

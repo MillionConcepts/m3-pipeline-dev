@@ -8,10 +8,11 @@ from l0_l1b_l2.l1b_pipeline import run_l1b_new_pipeline, \
 
 def run_pipe(
     obs_id: str,
-    pipe_version: Literal['mission', 'new'] = 'mission',
+    pipe_version: Literal['mission', 'new', 'cleanup'] = 'mission',
     local_root: str = "data",
     save_steps: bool = False,
     backplanes: bool = False,
+    smooth_shape: bool = False,
     verbose: bool = True,
 ):
     """
@@ -24,6 +25,8 @@ def run_pipe(
            save_steps: Save intermediate step data as fits files. Eventually we
            could change this to designate specific steps to save.
            backplanes: Return backplanes (flag map, "error" from dark std)
+           smooth_shape: Apply mission-derived smooth shape per-band and
+           temperature-dependent gain correction factors.
            verbose: Give me all the info or don't.
     """
 
@@ -41,6 +44,7 @@ def run_pipe(
         local_root=local_root,
         save_steps=save_steps,
         backplanes=backplanes,
+        smooth_shape=smooth_shape,
         verbose=verbose,
     )
 

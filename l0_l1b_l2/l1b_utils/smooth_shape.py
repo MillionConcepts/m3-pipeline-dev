@@ -1,4 +1,5 @@
 from pathlib import Path
+import numpy as np
 
 
 def load_ssc_factors(ssc_path: Path):
@@ -7,7 +8,6 @@ def load_ssc_factors(ssc_path: Path):
     temp. These were calculated by the mission.
     """
     import pandas as pd
-    import numpy as np
 
     # could combine these tables to one parquet file maybe (they're really
     # small)
@@ -16,3 +16,19 @@ def load_ssc_factors(ssc_path: Path):
                             dtype={'corr_factor': np.float32},
                             )
     return ssc_table['corr_factor'].values
+
+
+def apply_ssc_factors(obs_image: np.ndarray, ssc_path: Path):
+    """
+    Apply smooth shape correction gain factors developed by the mission team.
+    These are temperature-specific curves.
+    """
+    from l0_l1b_l2.reference import check_shape
+
+    ssc_factors = load_ssc_factors(ssc_path)
+    check_shape(
+        obs_image.shape,
+        (len(ssc_factors), obs_image.shape[-1]),
+        'smooth shape'
+    )
+    return obs_image * ssc_factors[np.newaxis, :, np.newaxis]

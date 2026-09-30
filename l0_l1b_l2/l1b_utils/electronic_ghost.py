@@ -1,8 +1,9 @@
 import numpy as np
+from l0_l1b_l2.reference import check_shape
 
 
 def ghost_correction(
-        obs_data: np.ndarray,
+        obs_image: np.ndarray,
         l0_samples: int,
         correction_factor: float,
         dark_cols: str = None,
@@ -37,9 +38,9 @@ def ghost_correction(
 
     panel_width = l0_samples // 4  # 80 for 320 etc
 
-    # frame = obs_data.copy()
+    # frame = obs_image.copy()
     # deal with nans from negative pixels
-    frame = np.nan_to_num(obs_data, nan=0.0)
+    frame = np.nan_to_num(obs_image, nan=0.0)
 
     # don't use dark vals if we pass dark cols
     # for correction bc they aren't dark subtracted
@@ -48,13 +49,13 @@ def ghost_correction(
 
     # split by 4 panels 80 or 160 wide
     frame_panels = frame.reshape(
-        obs_data.shape[0],
-        obs_data.shape[1],
+        obs_image.shape[0],
+        obs_image.shape[1],
         4,
         panel_width
     )
-    obs_data_reshaped = obs_data.reshape(
-        obs_data.shape[0], obs_data.shape[1],
+    obs_image_reshaped = obs_image.reshape(
+        obs_image.shape[0], obs_image.shape[1],
         4,
         panel_width
     )
@@ -66,9 +67,10 @@ def ghost_correction(
             axis=2
         )
         ghost_signal = correction_factor * other_panels.sum(axis=2)
-        obs_data_reshaped[:, :, panel_idx, :] += ghost_signal
+        obs_image_reshaped[:, :, panel_idx, :] += ghost_signal
 
-    return obs_data_reshaped.reshape(
-        obs_data_reshaped.shape[0],
-        obs_data_reshaped.shape[1], -1
+    return obs_image_reshaped.reshape(
+        obs_image_reshaped.shape[0],
+        obs_image_reshaped.shape[1],
+        -1
     )

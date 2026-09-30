@@ -1,5 +1,5 @@
 from pathlib import Path
-
+import numpy as np
 
 """
 From Green 2011: 
@@ -33,7 +33,6 @@ def load_rdn_cal(rdn_cal_path: Path):
     Read in radiometric calibration shape correction factors per channel.
     """
     import pandas as pd
-    import numpy as np
 
     rdn_cal = pd.read_fwf(
         rdn_cal_path,
@@ -41,3 +40,18 @@ def load_rdn_cal(rdn_cal_path: Path):
         dtype={'rdn_cal_coeff': np.float32},
     )
     return rdn_cal['rdn_cal_coeff'].values
+
+
+def apply_rdn_cal(obs_image: np.ndarray, rdn_cal_path: Path):
+    """
+    Apply radiometric calibration coefficients per channel.
+    """
+    from l0_l1b_l2.reference import check_shape
+
+    rdn_cal = load_rdn_cal(rdn_cal_path)
+    check_shape(
+        obs_image.shape,
+        (len(rdn_cal), obs_image.shape[-1]),
+        'radiometric cal coefficients'
+    )
+    return obs_image * rdn_cal[np.newaxis, :, np.newaxis]
