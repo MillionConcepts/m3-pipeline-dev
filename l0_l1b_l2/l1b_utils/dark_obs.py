@@ -130,6 +130,39 @@ def basic_dark_pedestal_correction(
     return obs_image
 
 
+def per_band_dark_pedestal_correction(
+        obs_image: np.ndarray,
+        dark_cols: list = None
+) -> np.ndarray:
+    """
+    Dark pedestal correction using the dark columns. Dark pedstal is taken
+    as the median of the dark col values per band. We use a median filter
+    to smooth the noisiness of dark signal at high temperatures.
+
+    Args:
+        obs_image: Obs image data, dark subtracted.
+        dark_cols: Columns used for estimating dark signal during an
+            observation (they receive no light).
+    """
+    from scipy.ndimage import median_filter
+
+    pedestals = np.nanmedian(obs_image[:, :, dark_cols], axis=2)
+    # 5 sample wide median filter is okay-ish for warm observations, but
+    # it is still spikey. A wider filter (11+ pixels) is smoother but
+    # looses the smaller bump in signal at lower bands.
+    filtered_pedestals = median_filter(pedestals, size=(1, 5), mode='nearest')
+
+    check_shape(
+        obs_image.shape[:2],
+        filtered_pedestals.shape,
+        'per band dark pedestal'
+    )
+
+    obs_image = obs_image - filtered_pedestals[:, :, np.newaxis]
+
+    return obs_image
+
+
 def illumination_based_dark_pedestal_correction(
         obs_image: np.ndarray,
         left_cutoff_col: int,

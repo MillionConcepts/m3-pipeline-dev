@@ -5,9 +5,6 @@ import numpy as np
 from l0_l1b_l2.reference import PipeManager, check_shape
 
 
-#TODO: add ndarray shape checks for every single cal function so they can be
-#   mixed and matched easier
-
 def run_l1b_mission_pipeline(moonager: PipeManager):
     """
     L0 to L1B Pipeline based on an originalist reading of the DPSIS.
@@ -17,7 +14,8 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
     from l0_l1b_l2.l1b_utils.loader import load_fits_into_frame
     from l0_l1b_l2.l1b_utils.dark_obs import make_dark_signal_image, \
         basic_dark_pedestal_correction,\
-        illumination_based_dark_pedestal_correction
+        illumination_based_dark_pedestal_correction, \
+        per_band_dark_pedestal_correction
     from l0_l1b_l2.l1b_utils.electronic_ghost import ghost_correction
     from l0_l1b_l2.l1b_utils.mission_bde import bde_correction, \
         detector_array_tap_interpolation, filter_seam_interpolation
@@ -110,7 +108,7 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
     # (6) Dark Pedestal Shift Correction
     if moonager.verbose:
         print("Running dark pedestal shift correction.")
-    obs_image = basic_dark_pedestal_correction(
+    obs_image = per_band_dark_pedestal_correction(
         obs_image=obs_image,
         dark_cols=moonager.dark_cols,
     )
