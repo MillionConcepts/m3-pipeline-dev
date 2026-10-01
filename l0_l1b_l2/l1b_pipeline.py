@@ -15,7 +15,8 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
     from l0_l1b_l2.l1b_utils.dark_obs import make_dark_signal_image, \
         basic_dark_pedestal_correction,\
         illumination_based_dark_pedestal_correction, \
-        per_band_dark_pedestal_correction
+        per_band_dark_pedestal_correction, \
+        remove_band_dependence_in_dark_signal
     from l0_l1b_l2.l1b_utils.electronic_ghost import ghost_correction
     from l0_l1b_l2.l1b_utils.mission_bde import bde_correction, \
         detector_array_tap_interpolation, filter_seam_interpolation
@@ -119,6 +120,13 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
             obs_image[:, :, :],
             overwrite=True,
         )
+
+    if moonager.verbose:
+        print("Adding back band dependence in dark signal.")
+    obs_image = remove_band_dependence_in_dark_signal(
+        obs_image=obs_image,
+        dark_path=moonager.dark_path
+    )
 
     # Variable column group correction
     # (time-variable organized flashing of background columns

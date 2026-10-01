@@ -42,17 +42,19 @@ def make_dark_signal_image(
     exc = 1
 
     if dark_method.lower() == 'mean':
-        dark_signal = dark_obs_data[exc:-exc, :, :].mean(axis=0)
+        dark_signal = np.nanmean(dark_obs_data[exc:-exc, :, :], axis=0)
     elif dark_method.lower() == 'median':
-        dark_signal = np.median(dark_obs_data[exc:-exc, :, :], axis=0)
+        dark_signal = np.nanmedian(dark_obs_data[exc:-exc, :, :], axis=0)
     elif dark_method.lower() == 'std':
-        dark_signal = np.std(dark_obs_data[exc:-exc, :, :], axis=0)
+        dark_signal = np.nanstd(dark_obs_data[exc:-exc, :, :], axis=0)
     elif dark_method.lower() == 'max':
-        dark_signal = np.max(dark_obs_data[exc:-exc, :, :], axis=0)
+        dark_signal = np.nanmax(dark_obs_data[exc:-exc, :, :], axis=0)
     elif dark_method.lower() == 'lowband':
         #     lines, bands, cols = dark_obs_data.shape
-        dark_signal = np.median(dark_obs_data[exc:-exc, 3:9, :],
-                                axis=(0, 1))
+        dark_signal = np.nanmedian(
+            dark_obs_data[exc:-exc, 3:9, :],
+            axis=(0, 1)
+        )
         dark_signal = np.broadcast_to(dark_signal, (bands, cols))
     else:
         # IDK why we would use this yet
@@ -65,6 +67,29 @@ def make_dark_signal_image(
 
     return dark_signal
 
+
+def remove_band_dependence_in_dark_signal(
+        obs_image: np.ndarray,
+        dark_path: Path,
+) -> np.ndarray:
+    """
+    Get median dark signal per band, subtract median of bands 5-18.
+    Then median filter all bands and add to image.
+    """
+    from scipy.ndimage import median_filter
+
+    median_dark = make_dark_signal_image(
+        dark_path=dark_path,
+        dark_method='median'
+    )
+    band_medians = np.nanmedian(median_dark, axis=1)
+    lowband_median = np.nanmedian(band_medians[5:19])
+    band_medians = band_medians - lowband_median
+
+    filtered_band_medians = median_filter(band_medians, size=7, mode='nearest')
+
+    obs_image = obs_image + filtered_band_medians[np.newaxis, :, np.newaxis]
+    return obs_image
 
 # Ideas at the moment:
 # Currently I think our best bet is to treat the dark pedestal effect as some
@@ -146,11 +171,11 @@ def per_band_dark_pedestal_correction(
     """
     from scipy.ndimage import median_filter
 
-    pedestals = np.nanmedian(obs_image[:, :, dark_cols], axis=2)
+    pedestals = np.nanmedian(obs_image[:, :, 1:3], axis=2)
     # 5 sample wide median filter is okay-ish for warm observations, but
     # it is still spikey. A wider filter (11+ pixels) is smoother but
     # looses the smaller bump in signal at lower bands.
-    filtered_pedestals = median_filter(pedestals, size=(1, 5), mode='nearest')
+    filtered_pedestals = median_filter(pedestals, size=(1, 11), mode='nearest')
 
     check_shape(
         obs_image.shape[:2],
