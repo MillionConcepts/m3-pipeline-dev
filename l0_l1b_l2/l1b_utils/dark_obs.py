@@ -111,6 +111,7 @@ def remove_band_dependence_in_dark_signal(
 # data per dark column set per band / line. However, at warmer temperatures
 # the data gets so messy and jagged I don’t know if this is a good idea.
 
+
 def basic_dark_pedestal_correction(
         obs_image: np.ndarray,
         dark_cols: list = None,
@@ -171,7 +172,8 @@ def per_band_dark_pedestal_correction(
     """
     from scipy.ndimage import median_filter
 
-    pedestals = np.nanmedian(obs_image[:, :, 1:3], axis=2)
+    pedestals = np.nanmedian(obs_image[:, :, dark_cols], axis=2)
+
     # 5 sample wide median filter is okay-ish for warm observations, but
     # it is still spikey. A wider filter (11+ pixels) is smoother but
     # looses the smaller bump in signal at lower bands.
@@ -185,7 +187,7 @@ def per_band_dark_pedestal_correction(
 
     obs_image = obs_image - filtered_pedestals[:, :, np.newaxis]
 
-    return obs_image
+    return obs_image.astype(np.float32)
 
 
 def illumination_based_dark_pedestal_correction(
