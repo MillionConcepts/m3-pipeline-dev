@@ -61,13 +61,14 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
     obs_image = bde_correction(
         obs_image=obs_image,
         bde_path=moonager.flag_path,
+        ignore_bands=moonager.omitted_channels,
     )
     if moonager.save_steps:
         fits.writeto(
             f"{moonager.obs_id}_bde.fits",
             obs_image[:, :, :],
             overwrite=True
-        )
+            )
 
     # (3) Detector Tap Interpolation
     if moonager.verbose:

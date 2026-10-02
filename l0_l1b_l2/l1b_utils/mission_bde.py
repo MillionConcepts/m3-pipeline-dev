@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Optional
 from l0_l1b_l2.reference import check_shape
 import numpy as np
 
@@ -124,7 +125,12 @@ def filter_seam_interpolation(obs_image: np.ndarray, channels: list):
 #     return obs_image
 
 
-def bde_correction(obs_image: np.ndarray, bde_path: Path):
+def bde_correction(
+        obs_image: np.ndarray,
+        bde_path: Path,
+        ignore_bands: Optional[list[int]] = None,
+        ignore_cols: Optional[list[int]] = None,
+):
     """
     Elements are flagged 0-5 in these fits files. Values 1-4 seem to indicate
     things that are "flagged", 1 being the lowest level and 4 the highest. I
@@ -141,6 +147,8 @@ def bde_correction(obs_image: np.ndarray, bde_path: Path):
 
     Supports 3D arrays (frames, channels, cols) and 2D arrays (channels, cols).
     For 3D arrays, correction is applied per-frame using that frame's values.
+
+    Optionally ignore some bands / cols.
     """
     from .loader import load_fits_into_frame
 
@@ -152,12 +160,20 @@ def bde_correction(obs_image: np.ndarray, bde_path: Path):
 
     n_rows, n_cols = bad_mask.shape  # 86 x 320 for global mode
 
+    # we want to ignore the channels that are dropped later in the mission
+    # (no need to interpolate with bad data)
+    ignored = np.zeros_like(bad_mask)
+    if ignore_bands is not None:
+        ignored[np.asarray(ignore_bands), :] = True
+    if ignore_cols is not None:
+        ignored[:, np.asarray(ignore_cols)] = True
+
     # we only need to figure out the interpolation weights once for the obs
     # new_val =
     # val_at_top + (bad_row-top_row)/(bot_row-top_row)*(val_at_bot-val_at_top)
     # where the "weight" is (bad_row-top_row)/(bot_row-top_row)
 
-    bad_rows, bad_cols = np.where(bad_mask)  # all bad pixels
+    bad_rows, bad_cols = np.where(bad_mask & ~ignored)  # all bad pixels
 
     # find the closest top and bottom pixel
     top_rows = np.full(len(bad_rows), -1,
@@ -168,7 +184,7 @@ def bde_correction(obs_image: np.ndarray, bde_path: Path):
     good_in_col = []
     for c in range(n_cols):
         # get all good rows
-        good_in_col.append(np.where(~bad_mask[:, c])[0])
+        good_in_col.append(np.where(~bad_mask[:, c] & ~ignored[:, c])[0])
 
     # find closest good pixels
     for i, (r, c) in enumerate(zip(bad_rows, bad_cols)):
