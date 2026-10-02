@@ -110,7 +110,7 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
     # (6) Dark Pedestal Shift Correction
     if moonager.verbose:
         print("Running dark pedestal shift correction.")
-    obs_image = per_band_dark_pedestal_correction(
+    obs_image = basic_dark_pedestal_correction(
         obs_image=obs_image,
         dark_cols=moonager.dark_cols,
     )
@@ -121,13 +121,6 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
             obs_image[:, :, :],
             overwrite=True,
         )
-
-    if moonager.verbose:
-        print("Adding back band dependence in dark signal.")
-    obs_image = remove_band_dependence_in_dark_signal(
-        obs_image=obs_image,
-        dark_path=moonager.dark_path
-    )
 
     # Variable column group correction
     # (time-variable organized flashing of background columns
@@ -363,89 +356,119 @@ def run_l1b_new_pipeline(moonager: PipeManager):
     """
     from l0_l1b_l2.l1b_utils.loader import load_fits_into_frame
     from l0_l1b_l2.l1b_utils.dark_obs import make_dark_signal_image, \
-        illumination_based_dark_pedestal_correction
+        per_band_dark_pedestal_correction, \
+        remove_band_dependence_in_dark_signal
     from l0_l1b_l2.l1b_utils.electronic_ghost import ghost_correction
     from l0_l1b_l2.l1b_utils.mission_bde import bde_correction, \
-        detector_array_tap_interpolation
+        detector_array_tap_interpolation, filter_seam_interpolation
     from l0_l1b_l2.l1b_utils.mission_flat import make_flat_field_from_obs
-    from l0_l1b_l2.l1b_utils.new_flat import get_relative_gain_flat, \
-        fix_variable_columns
-    from l0_l1b_l2.l1b_utils.radiometric_calibration import load_rdn_cal
+    from l0_l1b_l2.l1b_utils.new_flat import fix_variable_columns
+    from l0_l1b_l2.l1b_utils.radiometric_calibration import apply_rdn_cal
+    from l0_l1b_l2.l1b_utils.smooth_shape import apply_ssc_factors
     from l0_l1b_l2.l1b_utils.scattered_light import apply_scattered_light_corr
     from l0_l1b_l2.reference import check_l1b_label
     from l0_l1b_l2.l1b_utils.make_backplanes import make_dark_std_backplane, \
         make_flag_backplane
+    from l0_l1b_l2.l1b_utils.new_flat import fix_variable_columns
+
+    # standard obs_image shape for this software will be axis 0 = lines aka
+    # frames aka temporal direction, so:
+    # obs_image = [lines, bands, samples]
 
     obs_image = load_fits_into_frame(moonager.l0_obs_path)
+    check_shape(
+        obs_image.shape,
+        (moonager.l0_channels, moonager.l0_samples),
+        'loading l0 obs data'
+    )
     obs_image[obs_image < 0] = np.nan
 
-    # Dark Signal Subtraction
-    # leaving dark cols of obs image unaffected for pedestal
-    # correction
+    # (1) Dark Signal Subtraction
     if moonager.verbose:
         print("Subtracting dark signal.")
-    dark_signal_image = make_dark_signal_image(
+    obs_image -= make_dark_signal_image(
         dark_path=moonager.dark_path,
-        dark_cols=moonager.dark_cols,
-        dark_method='mean'
+        dark_method='median'
     )
-    obs_image -= dark_signal_image
     if moonager.save_steps:
         fits.writeto(
-            f"{moonager.local_root}/{moonager.obs_id}_dss.fits",
+            f"{moonager.obs_id}_dss.fits",
             obs_image[:, :, :],
             overwrite=True
         )
-        fits.writeto(
-            f"{moonager.local_root}/{moonager.obs_id}_dark_signal.fits",
-            dark_signal_image,
-            overwrite=True
-        )
 
-    # Dark Pedestal Shift Correction
+    # (2) Bad Detector Element Correction (Flag)
     if moonager.verbose:
-        print("Applying dark pedestal shift correction.")
-    obs_image = illumination_based_dark_pedestal_correction(
+        print("Running flagged pixel correction.")
+    obs_image = bde_correction(
         obs_image=obs_image,
-        left_cutoff_col=moonager.left_col_cutoff,
-        right_cutoff_col=moonager.right_col_cutoff,
+        bde_path=moonager.flag_path,
+        ignore_bands=moonager.omitted_channels,
     )
     if moonager.save_steps:
         fits.writeto(
-            f"{moonager.local_root}/{moonager.obs_id}_pedestal.fits",
+            f"{moonager.obs_id}_bde.fits",
             obs_image[:, :, :],
-            overwrite=True,
+            overwrite=True
         )
 
-    # Electronic Ghost Correction
-    # fix ghosts before flagged pixels
+    # (3) Detector Tap Interpolation
     if moonager.verbose:
-        print("Running ghost correction. Spooky!")
+        print("Interpolating tap cols.")
+    obs_image = detector_array_tap_interpolation(
+        obs_image=obs_image,
+        cols=moonager.read_out_cols
+    )
+
+    # (4) Filter Seam Interpolation
+    if moonager.verbose:
+        print("Interpolating filter seams.")
+    obs_image = filter_seam_interpolation(
+        obs_image=obs_image,
+        channels=moonager.filter_seam_rows
+    )
+    if moonager.save_steps:
+        fits.writeto(
+            f"{moonager.obs_id}_fs_tap.fits",
+            obs_image[:, :, :],
+            overwrite=True
+        )
+
+    # (5) Electronic Ghost Correction
+    if moonager.verbose:
+        print("Running electronic ghost correction.")
     obs_image = ghost_correction(
         obs_image=obs_image,
         l0_samples=moonager.l0_samples,
         correction_factor=moonager.ghost_corr_factor,
     )
-
-    # Bad Detector Element Correction (Flag)
-    if moonager.verbose:
-        print("Running bad detector element correction.")
-    obs_image = bde_correction(
-        obs_image=obs_image,
-        bde_path=moonager.flag_path,
-    )
     if moonager.save_steps:
         fits.writeto(
-            f"{moonager.local_root}/{moonager.obs_id}_bde.fits",
+            f"{moonager.obs_id}_ghost.fits",
             obs_image[:, :, :],
             overwrite=True
         )
-    # Detector Tap Interpolation
+
+    # (6) Dark Pedestal Shift Correction
     if moonager.verbose:
-        print("Running TAP array interpolation.")
-    obs_image = detector_array_tap_interpolation(
+        print("Running dark pedestal shift correction.")
+    obs_image = per_band_dark_pedestal_correction(
         obs_image=obs_image,
-        cols=moonager.read_out_cols,
+        dark_cols=moonager.dark_cols,
+    )
+
+    if moonager.save_steps:
+        fits.writeto(
+            f"{moonager.obs_id}_pedestal.fits",
+            obs_image[:, :, :],
+            overwrite=True,
+        )
+
+    if moonager.verbose:
+        print("Adding back band dependence in dark signal.")
+    obs_image = remove_band_dependence_in_dark_signal(
+        obs_image=obs_image,
+        dark_path=moonager.dark_path
     )
 
     # Variable column group correction
@@ -459,17 +482,17 @@ def run_l1b_new_pipeline(moonager: PipeManager):
         col_groups=moonager.bad_column_groups,
     )
 
-    # Scattered Light Correction
+    # (7) Scattered Light Correction
     if moonager.verbose:
         print("Applying scattered light correction.")
     obs_image = apply_scattered_light_corr(
-        obs_image=obs_image.transpose(1, 0, 2),
+        obs_image=obs_image,
         obs_type=moonager.mode,
         sl_ratio_corr=True,
     )
     if moonager.save_steps:
         fits.writeto(
-            f"{moonager.local_root}/{moonager.obs_id}_sl.fits",
+            f"{moonager.obs_id}_sl.fits",
             obs_image[:, :, :],
             overwrite=True
         )
@@ -497,19 +520,18 @@ def run_l1b_new_pipeline(moonager: PipeManager):
             overwrite=True
         )
 
-    # Radiometric Calibration
+    # (10) Radiometric Calibration
     if moonager.verbose:
-        print("Converting DN to radiance.")
-    rdn_cal = load_rdn_cal(moonager.rdn_cal_path)
-    obs_image = obs_image * rdn_cal[:, np.newaxis, np.newaxis]
+        print("Applying radiometric calibration coefficients.")
+    obs_image = apply_rdn_cal(obs_image, moonager.rdn_cal_path)
+    if moonager.save_steps:
+        fits.writeto(
+            f"{moonager.obs_id}_radcal.fits",
+            obs_image[:, :, :],
+            overwrite=True
+        )
 
-    # Smooth Shape Correction
-    # not implemented
-
-    # Ray tracing / location
-    # not implemented
-
-    # make overall flag map by combining other flag maps
+    # Make overall flag map by combining other flag maps
     if moonager.backplanes:
         if moonager.verbose:
             print("Making flag backplane.")
@@ -520,37 +542,47 @@ def run_l1b_new_pipeline(moonager: PipeManager):
         )
         del bad_col_group_map
 
+    # Drop first channel(s) and trim vignetted and dark columns
+    # obs_image shape = (frames / lines, channels / bands, samples / columns)
+    if moonager.verbose:
+        print("Trimming image samples and channels to L1B size.")
+    obs_image = obs_image[
+                :,
+                np.max(moonager.omitted_channels) + 1:,
+                moonager.left_col_cutoff:moonager.right_col_cutoff
+                ]
+
+    # # (11) Smooth Shape Correction
+    if moonager.smooth_shape:
+        obs_image = apply_ssc_factors(obs_image, moonager.ssc_path)
+
+    # (12) Ray tracing / location
+    # TODO: flip things around to the orientation used in level 2 etc.
+    #   For now, we check for a relevant L1B label which gives orientation info
+    #   and then flip around accordingly. if there is no L1B label, return as
+    #   is.
+
     # load orientation info from L1B label
     reverse_lines, reverse_samples = check_l1b_label(moonager.l1b_label)
 
     if reverse_lines:
-        obs_image = obs_image[:, ::-1, :]
+        obs_image = obs_image[::-1, :, :]
     if reverse_samples:
         obs_image = obs_image[:, :, ::-1]
 
-    # trim to L1B size
-    if moonager.verbose:
-        print("Trimming image samples and channels to L1B size.")
-    obs_image = obs_image[
-                np.max(moonager.omitted_channels) + 1:,
-                :,
-                moonager.left_col_cutoff:moonager.right_col_cutoff
-                ]
-
     # make backplanes, if you want
     if moonager.backplanes:
-        # make dark backplane
         dark_std = make_dark_std_backplane(moonager)
 
         # trim flag map to L1B size
         flag_backplane = flag_backplane[
-                np.max(moonager.omitted_channels) + 1:,
-                moonager.left_col_cutoff:moonager.right_col_cutoff
-                ]
+                         :,
+                         np.max(moonager.omitted_channels) + 1:,
+                         moonager.left_col_cutoff:moonager.right_col_cutoff
+                         ]
 
-        # fix to L1B orientations
         if reverse_lines:
-            flag_backplane = flag_backplane[:, ::-1, :]
+            flag_backplane = flag_backplane[::-1, :, :]
         if reverse_samples:
             dark_std = dark_std[:, ::-1]
             flag_backplane = flag_backplane[:, :, :-1]
