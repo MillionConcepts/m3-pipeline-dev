@@ -71,6 +71,9 @@ def average_over_lines(paths):
 
     for path in paths:
         with fits.open(path, memmap=True) as hdul:
+            #TODO: update this depending on how we decide to save outputs?
+            # or just add a check on the shape. ideally our new fits files
+            # indicate line / band axes etc
             cube = hdul[0].data
             n_bands, n_lines, n_samples = cube.shape
             if image_sum is None:
@@ -175,7 +178,12 @@ def make_flat_field_from_paths(paths, n_center=40) -> np.ndarray:
     return normalize_to_center(flat, n_center)
 
 
-def make_flat_field_from_obs(obs_image: np.ndarray, n_center=40) -> np.ndarray:
+def make_flat_field_from_obs(
+        obs_image: np.ndarray,
+        left_col_cutoff: int,
+        right_col_cutoff: int,
+        n_center=40,
+) -> np.ndarray:
     """
     Make an image-based flat field as described in Green 2011.
 
@@ -197,7 +205,12 @@ def make_flat_field_from_obs(obs_image: np.ndarray, n_center=40) -> np.ndarray:
     # 1) average data & normalize
     # obs image has shape band, line, sample
     # TODO: consider using only beginning or end of warm, long obs?
-    line_average = np.nanmedian(obs_image, axis=0)
+    # TODO: fit 2d plane to first lab flat and divide that out of the obs prior
+    #    to this version of flatting
+    line_average = np.nanmedian(
+        obs_image[:, :, left_col_cutoff:right_col_cutoff],
+        axis=0
+    )
     flat = normalize_to_center(line_average, n_center)
 
     # 2) 2d surface removal

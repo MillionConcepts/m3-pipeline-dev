@@ -500,12 +500,13 @@ def run_l1b_new_pipeline(moonager: PipeManager):
     # New flat
     if moonager.verbose:
         print("Making new flat.")
-    # flat = get_relative_gain_flat(
-    #     obs_image=obs_image.transpose(1, 0, 2),
-    #     moonager=moonager,
-    # )
-    flat = make_flat_field_from_obs(obs_image)
-    obs_image = obs_image / flat[np.newaxis, :, :]
+    flat = make_flat_field_from_obs(
+        obs_image,
+        left_col_cutoff=moonager.left_col_cutoff,
+        right_col_cutoff=moonager.right_col_cutoff,
+    )
+    obs_image[:, :, moonager.left_col_cutoff:moonager.right_col_cutoff] /= \
+        flat[np.newaxis, :, :]
     if moonager.verbose:
         print(f"Writing new flat to: {moonager.obs_id}_new_flat.fits.")
         fits.writeto(
