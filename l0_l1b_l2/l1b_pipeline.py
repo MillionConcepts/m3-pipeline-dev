@@ -361,7 +361,8 @@ def run_l1b_new_pipeline(moonager: PipeManager):
     from l0_l1b_l2.l1b_utils.electronic_ghost import ghost_correction
     from l0_l1b_l2.l1b_utils.mission_bde import bde_correction, \
         detector_array_tap_interpolation, filter_seam_interpolation
-    from l0_l1b_l2.l1b_utils.mission_flat import make_flat_field_from_obs
+    from l0_l1b_l2.l1b_utils.mission_flat import make_flat_field_from_obs, \
+        get_shadowing_from_lab_flat
     from l0_l1b_l2.l1b_utils.new_flat import fix_variable_columns
     from l0_l1b_l2.l1b_utils.radiometric_calibration import apply_rdn_cal
     from l0_l1b_l2.l1b_utils.smooth_shape import apply_ssc_factors
@@ -500,6 +501,12 @@ def run_l1b_new_pipeline(moonager: PipeManager):
     # New flat
     if moonager.verbose:
         print("Making new flat.")
+    shadow_surface = get_shadowing_from_lab_flat(
+        flat_path=moonager.lab_flat_path,
+        left_cutoff=moonager.left_col_cutoff,
+        right_cutoff=moonager.right_col_cutoff
+    )
+    obs_image = obs_image * shadow_surface[np.newaxis, :, :]
     flat = make_flat_field_from_obs(
         obs_image,
         left_col_cutoff=moonager.left_col_cutoff,

@@ -221,3 +221,28 @@ def make_flat_field_from_obs(
 
     # repeat 1b
     return normalize_to_center(flat, n_center)
+
+
+def get_shadowing_from_lab_flat(
+        flat_path: Path,
+        left_cutoff: int,
+        right_cutoff: int
+):
+    """
+    Get the shadowing from the lab flat, return as 2d surface.
+
+    The idea is to divide this out of an image before making a new flat.
+    That way we don't accidentally keep the shadowing in the flat
+    in an effort to remove observational illumination/shadowing.
+    """
+    flat = load_flats(flat_path)
+
+    flat_surface = fit_surface(
+        flat[:, left_cutoff:right_cutoff],
+        band_degree=3,
+        sample_degree=3,
+        n_iterations=2,
+    )
+
+    return flat_surface
+
