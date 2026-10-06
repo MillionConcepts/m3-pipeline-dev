@@ -506,7 +506,8 @@ def run_l1b_new_pipeline(moonager: PipeManager):
         left_cutoff=moonager.left_col_cutoff,
         right_cutoff=moonager.right_col_cutoff
     )
-    obs_image = obs_image * shadow_surface[np.newaxis, :, :]
+    obs_image[:, :, moonager.left_col_cutoff:moonager.right_col_cutoff] *=\
+        shadow_surface[np.newaxis, :, :]
     flat = make_flat_field_from_obs(
         obs_image,
         left_col_cutoff=moonager.left_col_cutoff,
