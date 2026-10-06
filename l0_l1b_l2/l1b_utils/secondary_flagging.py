@@ -204,7 +204,7 @@ def flag_l1b(
                       left_col_cutoff:right_col_cutoff
                       ]
             if reverse_samples:
-                bde_map = bde_map[:, :, ::-1]
+                bde_map = bde_map[:, ::-1]
             flags |= _bit(bde_map > 0, bde)[np.newaxis, :, :]
 
         # flagging for the following bits requires the L1B data
