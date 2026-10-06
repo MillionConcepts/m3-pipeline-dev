@@ -174,9 +174,9 @@ class PipeManager:
         self.dark_id = metadata['dark_signal_id'].lower()
         self.flag_id = metadata['bad_detector_map_id'].lower()
         self.obs_flat_id = metadata['flat_field_id'].lower()
-        self.l0_obs_path = self.local_root / f'{self.obs_id}_l0.fits'
+        self.l0_path = self.local_root / f'{self.obs_id}_l0.fits'
         self.dark_path = self.local_root / f'{self.dark_id}_l0.fits'
-        self.l1b_label = str(self.local_root / f'{self.obs_id}_l1b.xml')
+        self.l1b_label = self.local_root / f'{self.obs_id}_l1b.xml'
         self.obs_flat_path = self.local_root / f'{self.obs_flat_id}_ff.fits'
         self.flag_path = self.local_root / f'{self.flag_id}_bde.fits'
         self.ssc_path = self.local_root / f'{self.obs_id}_ssc.txt'
@@ -294,7 +294,7 @@ class PipeManager:
                     CAL_DIR) / 'm3g20110830_rfl_stat_pol_1.tab'
 
 
-def check_l1b_label(l1b_path: str):
+def check_l1b_label(l1b_path: Path):
     """
     Read L1B label for yaw / limb direction to undo until we have our own
     orientation info.
@@ -303,7 +303,7 @@ def check_l1b_label(l1b_path: str):
 
     try:
         label = pds4_tools.pds4_read(
-            l1b_path, lazy_load=True, quiet=True
+            str(l1b_path), lazy_load=True, quiet=True
         ).label
     except Exception as e:
         print(f"Issue opening original L1B label, information inside needed "

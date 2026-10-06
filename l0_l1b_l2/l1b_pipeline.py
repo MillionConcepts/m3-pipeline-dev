@@ -33,7 +33,7 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
     # frames aka temporal direction, so:
     # obs_image = [lines, bands, samples]
 
-    obs_image = load_fits_into_frame(moonager.l0_obs_path)
+    obs_image = load_fits_into_frame(moonager.l0_path)
     check_shape(
         obs_image.shape,
         (moonager.l0_channels, moonager.l0_samples),
@@ -264,7 +264,7 @@ def run_basic_cleanup_l0(moonager: PipeManager):
     from l0_l1b_l2.l1b_utils.mission_flat import apply_flat
     from l0_l1b_l2.reference import check_l1b_label
 
-    obs_image = load_fits_into_frame(moonager.l0_obs_path)
+    obs_image = load_fits_into_frame(moonager.l0_path)
     # obs_image shape = (frames / lines, channels / bands, samples / columns)
 
     # (1) Dark Signal Subtraction
@@ -376,7 +376,7 @@ def run_l1b_new_pipeline(moonager: PipeManager):
     # frames aka temporal direction, so:
     # obs_image = [lines, bands, samples]
 
-    obs_image = load_fits_into_frame(moonager.l0_obs_path)
+    obs_image = load_fits_into_frame(moonager.l0_path)
     check_shape(
         obs_image.shape,
         (moonager.l0_channels, moonager.l0_samples),

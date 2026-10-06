@@ -1,5 +1,5 @@
 import numpy as np
-from l0_l1b_l2.reference import PipeManager, check_shape
+from l0_l1b_l2.reference import PipeManager
 from pathlib import Path
 
 
@@ -22,7 +22,7 @@ def make_dark_std_backplane(moonager: PipeManager):
     """
     from l0_l1b_l2.l1b_utils.dark_obs import make_dark_signal_image
     from l0_l1b_l2.l1b_utils.mission_bde import bde_correction, \
-        detector_array_tap_interpolation, filter_seam_interpolation
+        detector_array_tap_interpolation
     from l0_l1b_l2.l1b_utils.smooth_shape import load_ssc_factors
     from l0_l1b_l2.l1b_utils.radiometric_calibration import load_rdn_cal
 
@@ -33,20 +33,13 @@ def make_dark_std_backplane(moonager: PipeManager):
         dark_method='std'
     )
     dark_std = bde_correction(
-        obs_data=dark_std,
+        obs_image=dark_std,
         bde_path=moonager.flag_path,
     )
     dark_std = detector_array_tap_interpolation(
-        obs_data=dark_std,
+        obs_image=dark_std,
         cols=moonager.read_out_cols
     )
-
-    # filter seams don't show up in darks, but bc the real values get removed
-    # in the obs, we also interpolate.
-    # dark_std = filter_seam_interpolation(
-    #     obs_data=dark_std,
-    #     channels=moonager.filter_seam_rows
-    # )
 
     rdn_cal = load_rdn_cal(moonager.rdn_cal_path)
     dark_std = dark_std * rdn_cal[:, np.newaxis]
@@ -107,3 +100,79 @@ def make_flag_backplane(
     flags |= _bit(bad_cols > 1, bad_col)[np.newaxis, :, :]
 
     return flags
+
+
+def make_mission_l1b_flag_backplane(
+        obs_id: str,
+        local_root: str = "data",
+        verbose: bool = True,
+):
+    """
+    From L1B data, and optionally L0 data and mission BDE files, build an
+    L1B-shaped flag map with in the shape lines x bands x samples.
+
+    Checks for necessary files in given dir (l1b data) and optional files
+    (l0 data, l1b label, bde/flag map) and then uses what is available to
+    make the flag map.
+
+    flag meanings
+    nan = 1
+    bde = 2
+    block_col = 4
+    bad_col = 8
+
+    """
+    from l0_l1b_l2.reference import PipeManager, check_observation
+    from l0_l1b_l2.l1b_utils.secondary_flagging import flag_l1b
+
+    # Set up paths and check observation for issues with flag maps,
+    # data availability, etc
+    obs_warn, obs_error, metadata = check_observation(obs_id)
+    if verbose and len(obs_warn) > 0:
+        print("\n".join(obs_warn))
+    if len(obs_error) > 0:
+        print("\n".join(obs_error))
+        print("Bailing out.")
+        return f"return code: {';'.join(obs_error)}"
+    moonager = PipeManager(
+        obs_id=obs_id,
+        metadata=metadata,
+        local_root=local_root,
+        verbose=verbose,
+    )
+
+    # Check files we need exist. We can run this if only L1B exists, but not
+    # without it (could modify to run and produce L0 shaped mask when no L1B?)
+    paths = {
+        "l1b_label": moonager.l1b_label,
+        "l0_path": moonager.l0_path,
+        "l1b_path": moonager.l1b_rdn_path,
+        "flag_path": moonager.flag_path,
+    }
+    for name, p in paths.items():
+        if not p.is_file():
+            if name == "l1b_path":
+                print(f"{name} not found at {p}. Cannot run L1B flagging "
+                      f"without the observation file. Bailing out.")
+                return
+            if moonager.verbose:
+                if name == "l1b_label":
+                    print(f"{name} not found: {p}. Without the orientation "
+                          f"information from the label, we must skip flagging "
+                          f"with the mission-derived flag map and L0 data.")
+                if name == "l0_path":
+                    print(f"{name} not found: {p}. Without L0 data we cannot "
+                          f"flag negative rollover values.")
+                if name == "flag_path":
+                    print(f"{name} not found: {p}. We cannot flag spectrally "
+                          f"interpolated values.")
+            paths[name] = False
+
+    return flag_l1b(
+        paths=paths,
+        omitted_channels=moonager.omitted_channels,
+        left_col_cutoff=moonager.left_col_cutoff,
+        right_col_cutoff=moonager.right_col_cutoff,
+        filter_seams=moonager.filter_seam_rows,
+        read_out_cols=moonager.read_out_cols,
+    )

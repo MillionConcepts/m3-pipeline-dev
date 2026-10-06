@@ -4,147 +4,8 @@ import numpy as np
 # from scipy.ndimage import label
 from l0_l1b_l2.reference import check_shape
 from typing import Literal
+from pathlib import Path
 
-# Functions below copied from Million Concept's Moonbow project
-
-# def binceil(value):
-#     rep = bin(value)
-#     sign = -1 if rep.startswith("-") else 1
-#     exponent = rep[3:] if sign == -1 else rep[2:]
-#     return 2 ** len(exponent) * sign
-#
-#
-# def make_fastkde_axis(array, nunique, downsample=1, padding=0.01):
-#     # lazily avoiding overflow issues for signed dtypes
-#     # w/negative values
-#     vrange = int(array.min()), int(array.max())
-#     pad = (vrange[1] - vrange[0]) * padding / 2
-#     padrange = int(vrange[0] - pad), int(vrange[1] + pad)
-#     return np.linspace(
-#         padrange[0], padrange[1], binceil(int(nunique / downsample)) + 1
-#     )
-#
-#
-# def make_floatkde_axis(array, padding, downsample, nunique):
-#     vrange = array.min(), array.max()
-#     pad = (vrange[1] - vrange[0]) * padding / 2
-#     return np.linspace(
-#         vrange[0] - pad,
-#         vrange[1] + pad,
-#         binceil(int(nunique / downsample)) + 1,
-#     )
-#
-#
-# def find_connected_1d(array, split_threshold=1, window_threshold=5):
-#     splits = np.uint8(
-#        ~np.concatenate([np.array([False]), np.diff(array) > split_threshold])
-#     )
-#     groups, group_ix = [], []
-#     labels, _ = label(splits)
-#     for lab, count in zip(*np.unique(labels, return_counts=True)):
-#         if lab == 0:
-#             continue
-#         if count < window_threshold:
-#             continue
-#         group_ix.append(np.nonzero(labels == lab)[0])
-#         groups.append(array[group_ix[-1]])
-#     return groups, group_ix
-#
-#
-# def make_kde(array,
-#             kernel_downsampling="auto",
-#             kernel_padding=0.05,
-#             uc=None
-# ):
-#     if array.ndim > 1:
-#         array = array.ravel()
-#     if uc is None:
-#         uc = np.unique(array, return_counts=True)
-#     if kernel_downsampling == "auto":
-#         kernel_downsampling = np.ceil(len(uc[0]) / 2500)
-#     if array.dtype.kind == "f":
-#         sample_points = make_floatkde_axis(
-#             array, kernel_padding, kernel_downsampling, len(uc[0])
-#         )
-#     else:
-#         sample_points = make_fastkde_axis(
-#             array,
-#             len(uc[0]),
-#             kernel_downsampling,
-#             kernel_padding,
-#         )
-#     from fastkde.fastKDE import fastKDE
-#
-#     kde = fastKDE(array, axes=[sample_points])
-#     return array, kde, uc
-#
-#
-# def find_peak_stats(values, cutoff=0.01):
-#     peaks = signal.find_peaks(values, prominence=cutoff)[0]
-#     match = np.isin(np.arange(len(values)), peaks)
-#     y, x = np.zeros(len(values)), np.arange(len(values))
-#     with warnings.catch_warnings():
-#         warnings.simplefilter("ignore")
-#         prom, _, _ = signal.peak_prominences(values, peaks)
-#         width, height, _, _ = signal.peak_widths(values, peaks)
-#     py = y.copy()
-#     py[np.nonzero(match)] = prom
-#     wy = y.copy()
-#     wy[np.nonzero(match)] = width
-#     hy = y.copy()
-#     hy[np.nonzero(match)] = height
-#     # fprom, fwidth, fheight, fprom_y, fwidth_y, fheight_y, fx
-#     return {
-#         "prom": np.flip(np.argsort(py)),
-#         "width": np.flip(np.argsort(wy)),
-#         "height": np.flip(np.argsort(hy)),
-#         "prom_y": py,
-#         "width_y": wy,
-#         "height_y": hy,
-#         "x": x,
-#     }
-#
-#
-# def kernel_spikes(
-#     array,
-#     uc=None,
-#     diff=None,
-#     # raw_sigma=2,
-#     # raw_abs=None,
-#     h_sigma=2,
-#     kernel_padding=0.1,
-#     kernel_downsampling="auto",
-#     median_threshold=10,
-#     max_consecutive=3,
-#     return_kde=False,
-# ):
-#     array, kde, uc = make_kde(array, kernel_downsampling, kernel_padding, uc)
-#     x, pdf = kde.axes[0], kde.pdf
-#     kde_bins = np.digitize(uc[0], x, right=True)
-#     # but this will find _outliers_ too....
-#     # ...maybe not if we tune it high enough.
-#     peak_stats = find_peak_stats(pdf, 0.0001)
-#     outlier_pred = np.nonzero(
-#         peak_stats["height"] > pdf.mean() + h_sigma * pdf.std()
-#     )[0]
-#     match = uc[0][np.isin(kde_bins, outlier_pred)]
-#     if max_consecutive is not None:
-#         if diff is None:
-#             diff = np.diff(array)
-#         runs = find_connected_1d(
-#             match,
-#             split_threshold=np.median(np.abs(diff[diff != 0]))
-#             * median_threshold,
-#             window_threshold=max_consecutive,
-#         )[0]
-#         if len(runs) > 0:
-#             match = match[~np.isin(match, np.concatenate(runs))]
-#     #         return runs, None
-#     if return_kde is True:
-#         return match, kde
-#     return match
-
-############
 
 # flag bad columns that span the whole observation
 # this is a very simple heuristic: is the majority of this column
@@ -264,3 +125,99 @@ def build_bad_col_map(
             # below means default 2 for groups of 1 pixel as a result
             flag_map[band, group[np.nanargmax(ratios[group])]] = 2
     return flag_map
+
+
+def get_l0_negative_flags(
+        l0_path: Path,
+):
+    """
+    Load L0, identify negative pixels, return obs as a bool array where
+    True = negative in L1B shape and orientation.
+    """
+    from .loader import load_fits_into_frame
+
+    l0 = load_fits_into_frame(l0_path)
+    return l0 < 0
+
+
+def flag_l1b(
+        paths: dict,
+        omitted_channels: list[int],
+        left_col_cutoff: int,
+        right_col_cutoff: int,
+        filter_seams: list[int],
+        read_out_cols: list[int],
+):
+    """
+    From L1B data, and optionally L0 data and mission BDE files, build an
+    L1B-shaped flag map with in the shape lines x bands x samples.
+
+    dict paths keys: "l1b_label", "l0_path", "l1b_path",  "flag_path"
+    """
+    from astropy.io import fits
+    from l0_l1b_l2.reference import check_l1b_label
+    from .make_backplanes import _bit
+    from .loader import load_fits_into_frame
+
+    # flag meanings
+    nan = 1
+    bde = 2
+    block_col = 4
+    bad_col = 8
+
+    # If the L1B label or L0 data are not present, we make flag map arr based
+    # on L1B shape. We check here to avoid having L0 data and L1B data loaded
+    # at the same time later on. Otherwise, flags will get made when we check
+    # L0 for negative pixels.
+    if not (paths['l1b_label'] and paths['l0_path']):
+        hdr = fits.getheader(paths['l1b_path'])
+        flags = np.zeros(
+            (hdr['NAXIS3'], hdr['NAXIS2'], hdr['NAXIS1']),
+            dtype=np.uint8,
+        )
+    # Check label for orientation of L1B, so we can orient the original flag
+    # map and L0 the same way
+    if paths['l1b_label']:
+        reverse_lines, reverse_samples = check_l1b_label(paths['l1b_label'])
+
+        # bit 0: NaN in obs, set to NaN because of negative values in L0
+        if paths['l0_path']:
+            # Must load L0, flag negative, and then trim and orient correctly
+            flags = get_l0_negative_flags(l0_path=paths['l0_path'])
+            flags = flags[
+                    :,
+                    np.max(omitted_channels) + 1:,
+                    left_col_cutoff:right_col_cutoff
+                    ]
+            if reverse_lines:
+                flags = flags[::-1, :, :]
+            if reverse_samples:
+                flags = flags[:, :, ::-1]
+            flags = _bit(flags==True, nan)
+
+        # bit 1: interpolated pixel in BDE map
+        if paths['flag_path']:
+            # Need to load and trim / orient to L1B s
+            bde_map = np.asarray(load_fits_into_frame(paths['flag_path']))
+            bde_map = bde_map[
+                      np.max(omitted_channels) + 1:,
+                      left_col_cutoff:right_col_cutoff
+                      ]
+            if reverse_samples:
+                bde_map = bde_map[:, :, ::-1]
+            flags |= _bit(bde_map > 0, bde)[np.newaxis, :, :]
+
+        # flagging for the following bits requires the L1B data
+        obs_image = load_fits_into_frame(paths['l1b_path'])
+
+        # bit 2: variable column block
+        # bad col group map shape lines, samples
+        # flags |= _bit(bad_col_group_map > 0, block_col)[:, np.newaxis, :]
+
+        # bit 3: bad columns (ie bad flat or missed bright / dark pixel)
+        # bad cols shape band, samples
+        bad_cols = build_bad_col_map(obs_image)
+        flags |= _bit(bad_cols > 1, bad_col)[np.newaxis, :, :]
+
+    # return in original view of l1b
+    return flags.transpose(1, 0, 2)
