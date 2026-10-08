@@ -362,7 +362,7 @@ def run_l1b_new_pipeline(moonager: PipeManager):
     from l0_l1b_l2.l1b_utils.mission_bde import bde_correction, \
         detector_array_tap_interpolation, filter_seam_interpolation
     from l0_l1b_l2.l1b_utils.mission_flat import make_flat_field_from_obs, \
-        get_shadowing_from_lab_flat
+        get_shadowing_from_lab_flat, make_flat_field_from_obs_with_masking
     from l0_l1b_l2.l1b_utils.new_flat import fix_variable_columns
     from l0_l1b_l2.l1b_utils.radiometric_calibration import apply_rdn_cal
     from l0_l1b_l2.l1b_utils.smooth_shape import apply_ssc_factors
@@ -465,12 +465,12 @@ def run_l1b_new_pipeline(moonager: PipeManager):
             overwrite=True,
         )
 
-    if moonager.verbose:
-        print("Adding back band dependence in dark signal.")
-    obs_image = remove_band_dependence_in_dark_signal(
-        obs_image=obs_image,
-        dark_path=moonager.dark_path
-    )
+    # if moonager.verbose:
+    #     print("Adding back band dependence in dark signal.")
+    # obs_image = remove_band_dependence_in_dark_signal(
+    #     obs_image=obs_image,
+    #     dark_path=moonager.dark_path
+    # )
 
     # Variable column group correction
     # (time-variable organized flashing of background columns
@@ -508,10 +508,14 @@ def run_l1b_new_pipeline(moonager: PipeManager):
     )
     obs_image[:, :, moonager.left_col_cutoff:moonager.right_col_cutoff] *=\
         shadow_surface[np.newaxis, :, :]
-    flat = make_flat_field_from_obs(
-        obs_image,
-        left_col_cutoff=moonager.left_col_cutoff,
-        right_col_cutoff=moonager.right_col_cutoff,
+    flat = make_flat_field_from_obs_with_masking(
+            obs_image,
+            left_col_cutoff=moonager.left_col_cutoff,
+            right_col_cutoff=moonager.right_col_cutoff,
+            flag_path=moonager.flag_path,
+            ignored_flag_cols=moonager.read_out_cols,
+            ignored_flag_rows=moonager.omitted_channels,
+            n_center=40
     )
     obs_image[:, :, moonager.left_col_cutoff:moonager.right_col_cutoff] /= \
         flat[np.newaxis, :, :]

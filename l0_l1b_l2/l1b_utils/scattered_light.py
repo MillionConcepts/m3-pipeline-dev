@@ -127,6 +127,8 @@ def apply_scattered_light_corr(
                 sl_ratio=sl_ratio,
                 sigma=sigma,
             )
+            # overall signal increase, not just for high areas
+            obs_image[band, :, :] *= (1 + sl_ratio)
     return obs_image
 
 
