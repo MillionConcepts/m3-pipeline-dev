@@ -514,7 +514,7 @@ def run_l1b_new_pipeline(moonager: PipeManager):
             right_col_cutoff=moonager.right_col_cutoff,
             flag_path=moonager.flag_path,
             ignored_flag_cols=moonager.read_out_cols,
-            ignored_flag_rows=moonager.omitted_channels,
+            ignored_flag_rows=moonager.filter_seam_rows,
             n_center=40
     )
     obs_image[:, :, moonager.left_col_cutoff:moonager.right_col_cutoff] /= \

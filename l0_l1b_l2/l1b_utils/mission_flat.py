@@ -345,8 +345,8 @@ def make_flat_field_from_obs_with_masking(
         left_col_cutoff: int,
         right_col_cutoff: int,
         flag_path: Path,
-        ignored_flag_cols: list[int],
-        ignored_flag_rows: list[int],
+        ignored_flag_cols: list[int] = None,
+        ignored_flag_rows: list[int] = None,
         n_center=40,
 ) -> np.ndarray:
     """
@@ -390,8 +390,10 @@ def make_flat_field_from_obs_with_masking(
     # trim to L1B width
     mask = load_fits_into_frame(flag_path)
     mask = mask != 0
-    mask[ignored_flag_rows, :] = False
-    mask[:, ignored_flag_cols] = False
+    if ignored_flag_cols is not None:
+        mask[:, ignored_flag_cols] = False
+    if ignored_flag_rows is not None:
+        mask[ignored_flag_rows, :] = False
     mask = mask[:, left_col_cutoff:right_col_cutoff]
 
     # TODO: add a warning or check on the number of masked pixels per band.
