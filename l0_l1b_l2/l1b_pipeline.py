@@ -404,6 +404,7 @@ def run_l1b_new_pipeline(moonager: PipeManager):
     obs_image = bde_correction(
         obs_image=obs_image,
         bde_path=moonager.flag_path,
+        extra_bde_path=moonager.additional_flag_path,
         ignore_bands=moonager.omitted_channels,
     )
     if moonager.save_steps:
@@ -513,6 +514,7 @@ def run_l1b_new_pipeline(moonager: PipeManager):
             left_col_cutoff=moonager.left_col_cutoff,
             right_col_cutoff=moonager.right_col_cutoff,
             flag_path=moonager.flag_path,
+            extra_flag_path=moonager.additional_flag_path,
             ignored_flag_cols=moonager.read_out_cols,
             ignored_flag_rows=moonager.filter_seam_rows,
             n_center=40
@@ -551,7 +553,8 @@ def run_l1b_new_pipeline(moonager: PipeManager):
         flag_backplane = make_flag_backplane(
             moonager.flag_path,
             bad_col_group_map,
-            obs_image
+            obs_image,
+            moonager.additional_flag_path,
         )
         del bad_col_group_map
 

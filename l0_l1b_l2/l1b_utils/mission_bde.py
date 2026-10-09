@@ -128,6 +128,7 @@ def filter_seam_interpolation(obs_image: np.ndarray, channels: list):
 def bde_correction(
         obs_image: np.ndarray,
         bde_path: Path,
+        extra_bde_path: Path = None,
         ignore_bands: Optional[list[int]] = None,
         ignore_cols: Optional[list[int]] = None,
 ):
@@ -150,9 +151,9 @@ def bde_correction(
 
     Optionally ignore some bands / cols.
     """
-    from .loader import load_fits_into_frame
+    from .loader import load_bde_map
 
-    bde_map = load_fits_into_frame(bde_path)
+    bde_map = load_bde_map(bde_path, extra_bde_path)
 
     check_shape(obs_image.shape, bde_map.shape)
 

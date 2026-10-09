@@ -58,9 +58,10 @@ def _bit(mask, bit):
 
 
 def make_flag_backplane(
-        flag_path: str,
+        flag_path: Path,
         bad_col_group_map: np.ndarray,
         obs_image: np.ndarray,
+        extra_flag_path: Path = None,
 ):
     """
     Combine all flags into backplane of L1B observation size.
@@ -74,7 +75,7 @@ def make_flag_backplane(
     6 = negative L1B values (secondary flagging)
 
     """
-    from .loader import load_fits_into_frame
+    from .loader import load_bde_map
     from l0_l1b_l2.l1b_utils.secondary_flagging import build_bad_col_map
 
     nan = 1
@@ -88,7 +89,7 @@ def make_flag_backplane(
 
     # bit 1: interpolated pixel in BDE map
     # bde map shape bands, samples
-    bde_map = np.asarray(load_fits_into_frame(Path(flag_path)))
+    bde_map = np.asarray(load_bde_map(Path(flag_path), extra_flag_path))
     flags |= _bit(bde_map > 0, bde)[np.newaxis, :, :]
 
     # bit 2: variable column block

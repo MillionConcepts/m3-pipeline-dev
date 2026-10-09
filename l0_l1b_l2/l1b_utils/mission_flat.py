@@ -345,6 +345,7 @@ def make_flat_field_from_obs_with_masking(
         left_col_cutoff: int,
         right_col_cutoff: int,
         flag_path: Path,
+        extra_flag_path: Path = None,
         ignored_flag_cols: list[int] = None,
         ignored_flag_rows: list[int] = None,
         n_center=40,
@@ -377,7 +378,7 @@ def make_flat_field_from_obs_with_masking(
     it is more fitting to just treat like a normal band since the whole thing
     is interpolated.
     """
-    from .loader import load_fits_into_frame
+    from .loader import load_bde_map
 
     # 1) average data & normalize
     # obs image has shape band, line, sample
@@ -388,7 +389,7 @@ def make_flat_field_from_obs_with_masking(
 
     # load mask and un-mask readout cols and filter seam rows,
     # trim to L1B width
-    mask = load_fits_into_frame(flag_path)
+    mask = load_bde_map(flag_path, extra_flag_path)
     mask = mask != 0
     if ignored_flag_cols is not None:
         mask[:, ignored_flag_cols] = False
