@@ -185,14 +185,15 @@ class PipeManager:
             self.rdn_gain_path = Path(CAL_DIR) / 'm3t20070912_rdn_gain.tab'
             self.rdn_spc_path = Path(CAL_DIR) / 'm3t20070912_rdn_spc.tab'
             self.rdn_cal_path = Path(CAL_DIR) / 'm3t20081118_rdn_cal.tab'
-            self.additional_flag_path = None
+            self.additional_flag_path = \
+                Path(CAL_DIR) / 'flag_map_target_combo.fits'
         elif self.mode.upper() == 'G':
             self.lab_flat_path = Path(CAL_DIR) / 'lab_flat_field_global.fits'
             self.rdn_gain_path = Path(CAL_DIR) / 'm3g20081211_rdn_gain.tab'
             self.rdn_spc_path = Path(CAL_DIR) / 'm3g20081211_rdn_spc.tab'
             self.rdn_cal_path = Path(CAL_DIR) / 'm3g20081118_rdn_cal.tab'
-            self.additional_flag_path = Path(CAL_DIR) / \
-                                        'switching_cold_bde_mask.fits'
+            self.additional_flag_path = \
+                Path(CAL_DIR) / 'flag_map_global_combo.fits'
 
         # other L0 -> L1B calibration things
         self.ghost_corr_factor = .0048
