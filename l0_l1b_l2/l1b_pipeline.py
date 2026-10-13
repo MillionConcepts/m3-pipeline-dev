@@ -194,9 +194,10 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
         if moonager.verbose:
             print("Making flag backplane.")
         flag_backplane = make_flag_backplane(
-            moonager.flag_path,
-            bad_col_group_map,
-            obs_image
+            flag_path=moonager.flag_path,
+            bad_col_group_map=bad_col_group_map,
+            obs_image=obs_image,
+            deprecated_channels=moonager.degraded_channels,
         )
         del bad_col_group_map
 
@@ -212,7 +213,13 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
 
     # # (11) Smooth Shape Correction
     if moonager.smooth_shape:
-        obs_image = apply_ssc_factors(obs_image, moonager.ssc_path)
+        if moonager.verbose:
+            print("Applying smooth shape correction.")
+        obs_image = apply_ssc_factors(
+            obs_image,
+            moonager.obs_id,
+            moonager.ssc_table_path
+        )
 
     # (12) Ray tracing / location
     # TODO: flip things around to the orientation used in level 2 etc.
@@ -551,10 +558,11 @@ def run_l1b_new_pipeline(moonager: PipeManager):
         if moonager.verbose:
             print("Making flag backplane.")
         flag_backplane = make_flag_backplane(
-            moonager.flag_path,
-            bad_col_group_map,
-            obs_image,
-            moonager.additional_flag_path,
+            flag_path=moonager.flag_path,
+            bad_col_group_map=bad_col_group_map,
+            obs_image=obs_image,
+            deprecated_channels=moonager.degraded_channels,
+            extra_flag_path=moonager.additional_flag_path,
         )
         del bad_col_group_map
 
@@ -570,7 +578,13 @@ def run_l1b_new_pipeline(moonager: PipeManager):
 
     # # (11) Smooth Shape Correction
     if moonager.smooth_shape:
-        obs_image = apply_ssc_factors(obs_image, moonager.ssc_path)
+        if moonager.verbose:
+            print("Applying smooth shape correction.")
+        obs_image = apply_ssc_factors(
+            obs_image,
+            moonager.obs_id,
+            moonager.ssc_table_path
+        )
 
     # (12) Ray tracing / location
     # TODO: flip things around to the orientation used in level 2 etc.

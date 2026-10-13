@@ -187,6 +187,7 @@ class PipeManager:
             self.rdn_cal_path = Path(CAL_DIR) / 'm3t20081118_rdn_cal.tab'
             self.additional_flag_path = \
                 Path(CAL_DIR) / 'flag_map_target_combo.fits'
+            self.ssc_table_path = Path(CAL_DIR) / 'target_ssc.csv'
         elif self.mode.upper() == 'G':
             self.lab_flat_path = Path(CAL_DIR) / 'lab_flat_field_global.fits'
             self.rdn_gain_path = Path(CAL_DIR) / 'm3g20081211_rdn_gain.tab'
@@ -194,6 +195,8 @@ class PipeManager:
             self.rdn_cal_path = Path(CAL_DIR) / 'm3g20081118_rdn_cal.tab'
             self.additional_flag_path = \
                 Path(CAL_DIR) / 'flag_map_global_combo.fits'
+            self.ssc_table_path = Path(CAL_DIR) / 'global_ssc.csv'
+
 
         # other L0 -> L1B calibration things
         self.ghost_corr_factor = .0048

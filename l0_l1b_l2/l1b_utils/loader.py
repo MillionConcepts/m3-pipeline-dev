@@ -1,5 +1,6 @@
 from pathlib import Path
 import numpy as np
+from l0_l1b_l2.reference import PipeManager
 
 
 def load_fits_into_frame(obs_path: Path) -> np.ndarray:
@@ -9,10 +10,19 @@ def load_fits_into_frame(obs_path: Path) -> np.ndarray:
     """
     from astropy.io import fits
 
-    filename = obs_path.name.lower()
+    obs_path = Path(obs_path)
 
-    with fits.open(obs_path) as hdul:
-        image = hdul[0].data
+    if not obs_path.is_file():
+        raise FileNotFoundError(f"File not found: {obs_path}")
+    try:
+        with fits.open(obs_path, memmap=False) as hdul:
+            image = hdul[0].data
+    except OSError as e:
+        raise OSError(f"Could not read FITS file {obs_path}, {e}")
+    if image is None:
+        raise ValueError(f"No data in primary HDU of {obs_path}")
+
+    filename = obs_path.name.lower()
 
     if "ff" in filename or "flat" in filename:
         return image.astype(np.float32)
@@ -30,11 +40,15 @@ def load_fits_into_frame(obs_path: Path) -> np.ndarray:
 
 
 def load_bde_map(flag_path: Path,
-                 additional_flag_path: Path = None
+                 moonager: PipeManager = None,
+                 additional_flag_path: Path = None,
                  ) -> np.ndarray:
     """
     Load the flag map as an int array, optionally adding a secondary flag map
     of the same shape.
+
+    If the BDE file is not available, we remake it using the dark signal
+    observation.
 
     Some flashing (likely ROIC noise) pixels are not flagged in warmer maps or
     are flagged on and off throughout the mission. Because these are frequently
@@ -42,11 +56,24 @@ def load_bde_map(flag_path: Path,
     precaution.
     """
     from l0_l1b_l2.reference import check_shape
+    from .mission_bde import build_bde_mask
 
-    bde_map = load_fits_into_frame(flag_path)
+    try:
+        bde_map = load_fits_into_frame(flag_path)
+    except Exception as e:
+        if moonager.verbose:
+            print(f"Making BDE map from dark signal observation because of "
+                  f"exception: {e}")
+        # it's unlikely one would get to this point with the dark observation
+        # not being present or not loading correctly
+        bde_map = build_bde_mask(
+            dark_path=moonager.dark_path,
+            obs_type=moonager.mode,
+            readout_cols=moonager.read_out_cols,
+            filter_seam_rows=moonager.filter_seam_rows
+        )
 
     if additional_flag_path is not None:
-        #TODO: make an extra cold switching flag bde map for target mode
         extra_bde_map = load_fits_into_frame(additional_flag_path)
         # the values in the map itself are counts of bde maps with that flag,
         # so we just set everything to 1 where flagged
