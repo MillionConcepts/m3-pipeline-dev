@@ -24,7 +24,6 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
     from l0_l1b_l2.l1b_utils.smooth_shape import apply_ssc_factors
     from l0_l1b_l2.l1b_utils.radiometric_calibration import apply_rdn_cal
     from l0_l1b_l2.l1b_utils.scattered_light import apply_scattered_light_corr
-    from l0_l1b_l2.reference import check_l1b_label
     from l0_l1b_l2.l1b_utils.make_backplanes import make_dark_std_backplane, \
         make_flag_backplane
     from l0_l1b_l2.l1b_utils.new_flat import fix_variable_columns
@@ -227,12 +226,10 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
     #   and then flip around accordingly. if there is no L1B label, return as
     #   is.
 
-    # load orientation info from L1B label
-    reverse_lines, reverse_samples = check_l1b_label(moonager.l1b_label)
-
-    if reverse_lines:
+    # use orientation info from L1B label
+    if moonager.reverse_lines:
         obs_image = obs_image[::-1, :, :]
-    if reverse_samples:
+    if moonager.reverse_samples:
         obs_image = obs_image[:, :, ::-1]
 
     # make backplanes, if you want
@@ -246,11 +243,11 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
                 moonager.left_col_cutoff:moonager.right_col_cutoff
                 ]
 
-        if reverse_lines:
+        if moonager.reverse_lines:
             flag_backplane = flag_backplane[::-1, :, :]
-        if reverse_samples:
+        if moonager.reverse_samples:
             dark_std = dark_std[:, ::-1]
-            flag_backplane = flag_backplane[:, :, :-1]
+            flag_backplane = flag_backplane[:, :, ::-1]
 
         return obs_image, dark_std, flag_backplane
 
@@ -269,7 +266,6 @@ def run_basic_cleanup_l0(moonager: PipeManager):
     from l0_l1b_l2.l1b_utils.mission_bde import bde_correction, \
         detector_array_tap_interpolation, filter_seam_interpolation
     from l0_l1b_l2.l1b_utils.mission_flat import apply_flat
-    from l0_l1b_l2.reference import check_l1b_label
 
     obs_image = load_fits_into_frame(moonager.l0_path)
     # obs_image shape = (frames / lines, channels / bands, samples / columns)
@@ -346,12 +342,10 @@ def run_basic_cleanup_l0(moonager: PipeManager):
                 moonager.left_col_cutoff:moonager.right_col_cutoff
                 ]
 
-    # load orientation info from L1B label
-    reverse_lines, reverse_samples = check_l1b_label(moonager.l1b_label)
-
-    if reverse_lines:
+    # use orientation info from L1B labels
+    if moonager.reverse_lines:
         obs_image = obs_image[:, ::-1, :]
-    if reverse_samples:
+    if moonager.reverse_samples:
         obs_image = obs_image[:, :, ::-1]
 
     return obs_image
@@ -374,7 +368,6 @@ def run_l1b_new_pipeline(moonager: PipeManager):
     from l0_l1b_l2.l1b_utils.radiometric_calibration import apply_rdn_cal
     from l0_l1b_l2.l1b_utils.smooth_shape import apply_ssc_factors
     from l0_l1b_l2.l1b_utils.scattered_light import apply_scattered_light_corr
-    from l0_l1b_l2.reference import check_l1b_label
     from l0_l1b_l2.l1b_utils.make_backplanes import make_dark_std_backplane, \
         make_flag_backplane
     from l0_l1b_l2.l1b_utils.new_flat import fix_variable_columns
@@ -587,17 +580,12 @@ def run_l1b_new_pipeline(moonager: PipeManager):
         )
 
     # (12) Ray tracing / location
-    # TODO: flip things around to the orientation used in level 2 etc.
-    #   For now, we check for a relevant L1B label which gives orientation info
-    #   and then flip around accordingly. if there is no L1B label, return as
-    #   is.
+    # TODO: PUT GEOMETRY STUFF HERE PROBABLY
 
-    # load orientation info from L1B label
-    reverse_lines, reverse_samples = check_l1b_label(moonager.l1b_label)
-
-    if reverse_lines:
+    # use orientation info from L1B label
+    if moonager.reverse_lines:
         obs_image = obs_image[::-1, :, :]
-    if reverse_samples:
+    if moonager.reverse_samples:
         obs_image = obs_image[:, :, ::-1]
 
     # make backplanes, if you want
@@ -611,11 +599,11 @@ def run_l1b_new_pipeline(moonager: PipeManager):
                          moonager.left_col_cutoff:moonager.right_col_cutoff
                          ]
 
-        if reverse_lines:
+        if moonager.reverse_lines:
             flag_backplane = flag_backplane[::-1, :, :]
-        if reverse_samples:
+        if moonager.reverse_samples:
             dark_std = dark_std[:, ::-1]
-            flag_backplane = flag_backplane[:, :, :-1]
+            flag_backplane = flag_backplane[:, :, ::-1]
 
         return obs_image, dark_std, flag_backplane
 

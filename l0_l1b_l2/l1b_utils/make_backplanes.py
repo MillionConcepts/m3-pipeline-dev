@@ -69,77 +69,74 @@ def flag_l1b(
         omitted_channels: list[int],
         left_col_cutoff: int,
         right_col_cutoff: int,
+        reverse_lines: bool,
+        reverse_samples: bool,
         deprecated_channels: list[int] = None,
 ):
     """
     From L1B data, and optionally L0 data and mission BDE files, build an
     L1B-shaped flag map with in the shape lines x bands x samples.
 
-    dict paths keys: "l1b_label", "l0_path", "l1b_path",  "flag_path"
+    dict paths keys: "l0_path", "l1b_path",  "flag_path"
     """
     from astropy.io import fits
-    from l0_l1b_l2.reference import check_l1b_label
     from .secondary_flagging import build_bad_col_map, get_l0_negative_flags
     from .loader import load_fits_into_frame
 
-    # If the L1B label or L0 data are not present, we make flag map arr based
+    # If the L0 data are not present, we make flag map arr based
     # on L1B shape. We check here to avoid having L0 data and L1B data loaded
     # at the same time later on. Otherwise, flags will get made when we check
     # L0 for negative pixels.
-    if not (paths['l1b_label'] and paths['l0_path']):
+    if not paths['l0_path']:
         hdr = fits.getheader(paths['l1b_path'])
         flags = np.zeros(
             (hdr['NAXIS3'], hdr['NAXIS2'], hdr['NAXIS1']),
             dtype=np.uint8,
         )
-    # Check label for orientation of L1B, so we can orient the original flag
-    # map and L0 the same way
-    if paths['l1b_label']:
-        reverse_lines, reverse_samples = check_l1b_label(paths['l1b_label'])
 
-        # bit 0: NaN in obs, set to NaN because of negative values in L0
-        if paths['l0_path']:
-            # Must load L0, flag negative, and then trim and orient correctly
-            flags = get_l0_negative_flags(l0_path=paths['l0_path'])
-            flags = flags[
-                    :,
-                    np.max(omitted_channels) + 1:,
-                    left_col_cutoff:right_col_cutoff
-                    ]
-            if reverse_lines:
-                flags = flags[::-1, :, :]
-            if reverse_samples:
-                flags = flags[:, :, ::-1]
-            flags = _bit(flags == True, NAN)
+    # bit 0: NaN in obs, set to NaN because of negative values in L0
+    if paths['l0_path']:
+        # Must load L0, flag negative, and then trim and orient correctly
+        flags = get_l0_negative_flags(l0_path=paths['l0_path'])
+        flags = flags[
+                :,
+                np.max(omitted_channels) + 1:,
+                left_col_cutoff:right_col_cutoff
+                ]
+        if reverse_lines:
+            flags = flags[::-1, :, :]
+        if reverse_samples:
+            flags = flags[:, :, ::-1]
+        flags = _bit(flags == True, NAN)
 
-        # bit 1: interpolated pixel in BDE map
-        if paths['flag_path']:
-            # Need to load and trim / orient to L1B s
-            bde_map = np.asarray(load_fits_into_frame(paths['flag_path']))
-            bde_map = bde_map[
-                      np.max(omitted_channels) + 1:,
-                      left_col_cutoff:right_col_cutoff
-                      ]
-            if reverse_samples:
-                bde_map = bde_map[:, ::-1]
-            flags |= _bit(bde_map > 0, BDE)[np.newaxis, :, :]
+    # bit 1: interpolated pixel in BDE map
+    if paths['flag_path']:
+        # Need to load and trim / orient to L1B s
+        bde_map = np.asarray(load_fits_into_frame(paths['flag_path']))
+        bde_map = bde_map[
+                  np.max(omitted_channels) + 1:,
+                  left_col_cutoff:right_col_cutoff
+                  ]
+        if reverse_samples:
+            bde_map = bde_map[:, ::-1]
+        flags |= _bit(bde_map > 0, BDE)[np.newaxis, :, :]
 
-        # flagging for the following bits requires the L1B data
-        obs_image = load_fits_into_frame(paths['l1b_path'])
+    # flagging for the following bits requires the L1B data
+    obs_image = load_fits_into_frame(paths['l1b_path'])
 
-        # bit 2: variable column block
-        # bad col group map shape lines, samples
-        # flags |= _bit(bad_col_group_map > 0, block_col)[:, np.newaxis, :]
+    # bit 2: variable column block
+    # bad col group map shape lines, samples
+    # flags |= _bit(bad_col_group_map > 0, block_col)[:, np.newaxis, :]
 
-        # bit 3: bad columns (ie bad flat or missed bright / dark pixel)
-        # bad cols shape band, samples
-        bad_cols = build_bad_col_map(obs_image)
-        flags |= _bit(bad_cols > 1, BAD_COL)[np.newaxis, :, :]
+    # bit 3: bad columns (ie bad flat or missed bright / dark pixel)
+    # bad cols shape band, samples
+    bad_cols = build_bad_col_map(obs_image)
+    flags |= _bit(bad_cols > 1, BAD_COL)[np.newaxis, :, :]
 
-        # bit 4: flag deprecated bands in l2 that were typically set to -999
-        # by the mission in l2. they look normal in l1b and l0.
-        if deprecated_channels is not None and len(deprecated_channels) > 0:
-            flags[:, deprecated_channels, :] |= L2_DEPRECATED
+    # bit 4: flag deprecated bands in l2 that were typically set to -999
+    # by the mission in l2. they look normal in l1b and l0.
+    if deprecated_channels is not None and len(deprecated_channels) > 0:
+        flags[:, deprecated_channels, :] |= L2_DEPRECATED
 
     # return in original view of l1b
     return flags.transpose(1, 0, 2)
@@ -179,7 +176,6 @@ def make_mission_l1b_flag_backplane(
     # Check files we need exist. We can run this if only L1B exists, but not
     # without it (could modify to run and produce L0 shaped mask when no L1B?)
     paths = {
-        "l1b_label": moonager.l1b_label,
         "l0_path": moonager.l0_path,
         "l1b_path": moonager.l1b_rdn_path,
         "flag_path": moonager.flag_path,
@@ -191,16 +187,15 @@ def make_mission_l1b_flag_backplane(
                       f"without the observation file. Bailing out.")
                 return
             if moonager.verbose:
-                if name == "l1b_label":
-                    print(f"{name} not found: {p}. Without the orientation "
-                          f"information from the label, we must skip flagging "
-                          f"with the mission-derived flag map and L0 data.")
                 if name == "l0_path":
                     print(f"{name} not found: {p}. Without L0 data we cannot "
                           f"flag negative rollover values.")
                 if name == "flag_path":
+                    # technically not true, we could use the dark, but then
+                    # it's not 100% necessarily true to the source material
                     print(f"{name} not found: {p}. We cannot flag spectrally "
                           f"interpolated values.")
+            # false if path doesn't exist
             paths[name] = False
 
     return flag_l1b(
@@ -208,6 +203,8 @@ def make_mission_l1b_flag_backplane(
         omitted_channels=moonager.omitted_channels,
         left_col_cutoff=moonager.left_col_cutoff,
         right_col_cutoff=moonager.right_col_cutoff,
+        reverse_lines=moonager.reverse_lines,
+        reverse_samples=moonager.reverse_samples,
         deprecated_channels=moonager.degraded_channels,
     )
 

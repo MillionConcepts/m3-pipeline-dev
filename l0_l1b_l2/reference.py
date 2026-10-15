@@ -1,35 +1,55 @@
 from datetime import datetime
 import pandas as pd
 from pathlib import Path
+import re
 from typing import Optional
 from l0_l1b_l2 import CAL_DIR
 
 
-def pull_metadata(obs_id: str, cal_dir: Optional[str] = None) -> dict:
+OBS_INFO_FILE = "l1b_processing_info.csv"
+OBS_ID_PATTERN = re.compile(r'^m3[gt]\d{8}t\d{6}$', re.IGNORECASE)
+
+# temperature difference between dark and obs to give a warning at
+MAX_TEMP_DIFF_K = 3
+
+
+def pull_metadata(obs_id: str, cal_dir: Optional[str] = None) \
+        -> Optional[dict]:
     """
     Read metadata scraped from L1B RDN HDRs for the eclipse + some quality
     checks done by hand on flag maps and darks.
+
+    The flat field temp is looked up from the flat obs row and added as
+    'flat_temp'. NaN if the flat obs isn't present (unlikely).
+
+    Returns None if the observation isn't in the table (ie likely a dark or
+    never processed to L1B due to temperature).
     """
-    if cal_dir is None:
-        cal_dir = CAL_DIR
-    if not isinstance(cal_dir, Path):
-        cal_dir = Path(cal_dir)
+    cal_dir = Path(CAL_DIR if cal_dir is None else cal_dir)
+    info = pd.read_csv(cal_dir / OBS_INFO_FILE)
+    id_cols = ['obs_id', 'bde_id', 'flat_id', 'dark_id', 'closest_dark']
 
-    metadata = pd.read_csv(cal_dir / "obs_cal_info.csv")
-    metadata = metadata[metadata['obs_id'] == obs_id.upper()]
+    # should all be lowercase but make sure
+    info[id_cols] = info[id_cols].apply(lambda col: col.str.lower())
 
-    if len(metadata) == 0:
-        print("This is not a valid observation ID, although it could be a dark"
-              " signal observation.")
+    matches = info[info['obs_id'] == obs_id.lower()]
+
+    if len(matches) == 0:
         return None
-    # sometimes there are multiple versions per obs, we want the latest one
-    # ie V03 instead of V01
-    elif len(metadata) > 1:
-        best_idx = metadata['version'].str.extract(r'(\d+)')[0].astype(
-            int).idxmax()
-        metadata = metadata.loc[[best_idx]]
+    if len(matches) > 1:
+        # The table currently has one row per obs; flag it if that changes.
+        print(f"Warning: {len(matches)} rows found for {obs_id}, "
+              f"using the first.")
 
-    return metadata.iloc[0].to_dict()
+    metadata = matches.iloc[0].to_dict()
+
+    # get temp of obs used for flat field
+    flat_row = info.loc[info['obs_id'] == metadata['flat_id'],
+                        'obs_temperature']
+    metadata['flat_temp'] = (flat_row.iloc[0] if len(flat_row)
+                             else float('nan'))
+
+    return metadata
 
 
 def check_observation(obs_id: str, local_root: Optional[str] = None):
@@ -37,83 +57,88 @@ def check_observation(obs_id: str, local_root: Optional[str] = None):
     Check that the input observation string matches the expected format & load
     info we have on it from the latest version of its L1B files
     (ie V03 not V01). Most of this info was scraped from L1B RDN HDRs in the
-    JPL PDS files.
+    JPL PDS files as well as L1B V03 LBL files.
 
     Some files were never processed to L1B for whatever reason: they are dark
     obs and therefore should not be processed in this way, or they had issues
-    (extremely hot etc.). These will return an error and empty dataframe at
-    this time.
+    (extremely hot etc.). These will return an error and empty dict.
 
     Basic obs format: M3MYYYYMMDDTHHMMSS, ex: m3g20090720t214000
 
+    Returns (warnings, errors, metadata).
     """
-    import re
-
     obs_warn: list[str] = []
     obs_error: list[str] = []
 
     # check the obs ID looks like an obs ID
-    obs_id_pattern = r'^m3[gt]\d{8}t\d{6}$'
-    if not bool(re.match(obs_id_pattern, obs_id, re.IGNORECASE)):
+    if not OBS_ID_PATTERN.match(obs_id):
         obs_error.append(f"This is not a valid obs ID: {obs_id}")
         return obs_warn, obs_error, {}
 
     metadata = pull_metadata(obs_id, local_root)
 
-    if len(metadata) == 0:
-        obs_error.append(f"No metadata found for observation {obs_id}.")
-        return obs_warn, obs_error
+    if metadata is None:
+        obs_error.append(f"No info found for observation {obs_id}. "
+                         f"It may be a dark signal observation or a real "
+                         f"observation that was never processed to L1B.")
+        return obs_warn, obs_error, {}
 
-    # check that this isn't a bad BDE or dark, usually from during the broken
-    # star tracker period
+    # check that this isn't a bad BDE / dark / flat, usually from during the
+    # broken star tracker period
     if metadata['bad_dark']:
         obs_warn.append(f"This has been flagged as a bad dark obs, "
-                        f"{metadata['dark_signal_id']}.")
+                        f"{metadata['dark_id']}.")
+    if metadata['bad_flat']:
+        obs_warn.append(f"This has been flagged as a bad flat field obs, "
+                        f"{metadata['flat_id']}.")
     if metadata['bad_bde']:
         obs_warn.append(f"This has been flagged as a bad BDE map, "
-                        f"{metadata['bad_detector_map_id']}.")
+                        f"{metadata['bde_id']}.")
 
-    # these could be warnings or errors depending on if they are used in the
-    # pipeline version being run
-    if not metadata['flat_in_usgs']:
-        obs_warn.append(f"The obs-based flat for this obs is not in the PDS, "
-                        f"{metadata['flat_field_id']}.")
-    if not metadata['bde_in_usgs']:
-        obs_warn.append(f"The flag map for this obs is not in the PDS, "
-                        f"{metadata['bad_detector_map_id']}.")
-    if not metadata['dark_in_usgs']:
-        obs_warn.append(f"The dark obs for this obs is not in the PDS, "
-                        f"{metadata['dark_signal_id']}.")
+    # if the dark used for L1B processing isn't the closest, warn the user
+    if not metadata['dark_matches_closest']:
+        obs_warn.append(f"The dark used for this obs, {metadata['dark_id']}, "
+                        f"is not the closest dark temporally, "
+                        f"{metadata['closest_dark']} "
+                        f"({metadata['closest_dark_gap_min']:.1f} min away, "
+                        f" and {metadata['closest_dark_temp']:.2f} K).")
 
-    # somewhat arbitrary warning at 10% flagged
-    if metadata['bde_flag_coverage'] * 100 > 10:
-        obs_warn.append(f"{metadata['bde_flag_coverage'] * 100}% of the "
-                        f"mission-derived bad element map is flagged for this "
-                        f"observation.")
+    # temperature differences between the obs and its flat and dark
+    # this temp is from the L1B V03 LBLs. Other temps are recorded in various
+    # HDRS / L0 LBLS, but we go with the latest temp value here.
+    obs_temp = metadata['obs_temperature']
 
-    # the 3 K here is somewhat arbitrary. Lower may be more appropriate for
-    # a warning, or eventually unnecessary if we use synthetic darks or do
-    # away with obs-based flats.
-    flat_diff = abs(metadata['obs_temperature'] - metadata['flat_field_temp'])
-    if flat_diff > 3:
-        obs_warn.append(f"This obs and its flat field obs have a temp "
-                        f"difference greater than 3 Kelvin, "
-                        f"{flat_diff} "
-                        f"K.")
+    if pd.isna(metadata['flat_temp']):
+        # as far as I know I don't think this should ever occur
+        obs_warn.append(f"No temperature found for the flat field obs, "
+                        f"{metadata['flat_id']}.")
+    else:
+        flat_diff = abs(obs_temp - metadata['flat_temp'])
+        if flat_diff > MAX_TEMP_DIFF_K:
+            obs_warn.append(f"This obs and its flat field obs have a temp "
+                            f"difference greater than {MAX_TEMP_DIFF_K} "
+                            f"Kelvin, {flat_diff:.2f} K.")
 
-    dark_diff = abs(metadata['obs_temperature'] - metadata['dark_signal_temp'])
-    if dark_diff > 3:
-        obs_warn.append(f"This obs and its dark have a temp difference greater"
-                        f" than 3 Kelvin, "
-                        f"{dark_diff} "
-                        f"K.")
+    if pd.isna(metadata['dark_temp']):
+        # this does occur
+        obs_warn.append(f"No temperature recorded for the dark obs, "
+                        f"{metadata['dark_id']}.")
+    else:
+        dark_diff = abs(obs_temp - metadata['dark_temp'])
+        if dark_diff > MAX_TEMP_DIFF_K:
+            obs_warn.append(f"This obs and its dark have a temp difference "
+                            f"greater than {MAX_TEMP_DIFF_K} Kelvin, "
+                            f"{dark_diff:.2f} K.")
 
     return obs_warn, obs_error, metadata
 
 
 class PipeManager:
-    # this is kind of hellishly long so idk maybe we could structure all this
-    # info differently
+
+    """
+    Information about an observation necessary to process it, including
+    cal file paths, image orientation and size, as well as flagging specs.
+    """
 
     def __init__(self,
                  obs_id: str,
@@ -140,11 +165,20 @@ class PipeManager:
         # obs metadata
         self.obs_id = obs_id
         self.mode = metadata['obs_type']
-        self.obs_period = metadata['obs_period']
-        self.date = metadata['obs_date']
-        self.time = metadata['obs_time']
+        # self.obs_period = metadata['obs_period']
+        self.date = metadata['date']
+        self.time = metadata['time']
         self.obs_temp = metadata['obs_temperature']
-        self.obs_beta_angle = metadata['obs_beta_angle']
+        self.obs_beta_angle = metadata['beta_angle']
+
+        # obs l1b image size and orientation
+        self.lines = metadata['lines']
+        self.limb_dir = metadata['limb_dir']
+        self.yaw_dir = metadata['yaw_dir']
+        self.reverse_lines = (self.limb_dir == "ascending")
+        self.reverse_samples = \
+            (self.limb_dir == "descending" and self.yaw_dir == "reverse") or \
+            (self.limb_dir == "ascending" and self.yaw_dir == "forward")
 
         # temperature as hot or cold based on date, this designation
         # comes from the L2 section of the DPSIS
@@ -169,11 +203,15 @@ class PipeManager:
             ) else None
         )
 
-        # L0 -> L1B related calibration files
-        self.dark_temp = metadata['dark_signal_temp']
-        self.dark_id = metadata['dark_signal_id'].lower()
-        self.flag_id = metadata['bad_detector_map_id'].lower()
-        self.obs_flat_id = metadata['flat_field_id'].lower()
+        # L0 -> L1B related calibration file IDs
+        self.dark_id = metadata['dark_id'].lower()
+        self.dark_temp = metadata['dark_temp']
+        self.closest_dark_id = metadata['closest_dark'].lower()
+        self.closest_dark_temp = metadata['closest_dark_temp']
+        self.flag_id = metadata['bde_id'].lower()
+        self.obs_flat_id = metadata['flat_id'].lower()
+
+        # Cal file paths
         self.l0_path = self.local_root / f'{self.obs_id}_l0.fits'
         self.dark_path = self.local_root / f'{self.dark_id}_l0.fits'
         self.l1b_label = self.local_root / f'{self.obs_id}_l1b.xml'
@@ -196,7 +234,6 @@ class PipeManager:
             self.additional_flag_path = \
                 Path(CAL_DIR) / 'flag_map_global_combo.fits'
             self.ssc_table_path = Path(CAL_DIR) / 'global_ssc.csv'
-
 
         # other L0 -> L1B calibration things
         self.ghost_corr_factor = .0048
@@ -299,34 +336,6 @@ class PipeManager:
                     CAL_DIR) / 'm3g20111117_rfl_grnd_tru_1.tab'
                 self.stat_pol_path = Path(
                     CAL_DIR) / 'm3g20110830_rfl_stat_pol_1.tab'
-
-
-def check_l1b_label(l1b_path: Path):
-    """
-    Read L1B label for yaw / limb direction to undo until we have our own
-    orientation info.
-    """
-    import pds4_tools
-
-    try:
-        label = pds4_tools.pds4_read(
-            str(l1b_path), lazy_load=True, quiet=True
-        ).label
-    except Exception as e:
-        print(f"Issue opening original L1B label, information inside needed "
-              f"for orientation info: {e}")
-        return False, False
-
-    params = label.to_dict()['Product_Observational']['Observation_Area'][
-        'Mission_Area']['chan1:Chandrayaan-1_Parameters']
-
-    yaw = params['chan1:spacecraft_yaw_direction'].lower()
-    limb = params['chan1:orbit_limb_direction'].lower()
-    reverse_lines = (limb == "ascending")
-    reverse_samples = (limb == "descending" and yaw == "reverse") or \
-                      (limb == "ascending" and yaw == "forward")
-
-    return reverse_lines, reverse_samples
 
 
 class MismatchShapeError(ValueError):
