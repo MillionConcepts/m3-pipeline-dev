@@ -60,6 +60,11 @@ def make_flag_backplane(
     # mission in l2. they look normal in l1b and l0.
     if deprecated_channels is not None and len(deprecated_channels) > 0:
         # add one to each deprecated channel bc this is pre-trim to L1B length
+        #TODO: write this so it works for l0 shape but channels flagged are
+        # indexed based on l1b indices, where some have already been cut.
+        # but can't just add 1 because more than one channel is cut for target.
+        # something like + max from omitted_channels, which is the keyword for
+        # l0 cuts
         flags[:, [c + 1 for c in deprecated_channels], :] |= L2_DEPRECATED
     return flags
 
@@ -227,7 +232,7 @@ def make_dark_std_backplane(moonager: PipeManager):
     from l0_l1b_l2.l1b_utils.dark_obs import make_dark_signal_image
     from l0_l1b_l2.l1b_utils.mission_bde import bde_correction, \
         detector_array_tap_interpolation
-    from l0_l1b_l2.l1b_utils.smooth_shape import load_ssc_factors
+    from l0_l1b_l2.l1b_utils.smooth_shape import load_ssc_factors_from_table
     from l0_l1b_l2.l1b_utils.radiometric_calibration import load_rdn_cal
 
     # we do load a lot of stuff twice doing this separate from the
@@ -251,7 +256,8 @@ def make_dark_std_backplane(moonager: PipeManager):
                np.max(moonager.omitted_channels) + 1:,
                moonager.left_col_cutoff:moonager.right_col_cutoff
                ]
-    ssc_factors = load_ssc_factors(moonager.ssc_path)
+    ssc_factors = load_ssc_factors_from_table(moonager.obs_id,
+                                              moonager.ssc_table_path)
     dark_std = dark_std * ssc_factors[:, np.newaxis]
 
     return dark_std

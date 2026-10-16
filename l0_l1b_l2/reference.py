@@ -266,7 +266,13 @@ class PipeManager:
             # filter channels are 41, 42, 116 in DPSIS
             self.filter_seam_rows = [40, 41, 39, 115, 116, 114]
             # for L2
-            self.degraded_channels = [0, 1, 2, 3, 4, 5, 6, 7]
+            self.degraded_channels = [0, 1, 2, 3, 4, 5, 6, 7, 255]
+            # bad /variable column groups (1 indexed)
+            self.bad_column_groups = {
+                'group1': [74, 138, 170, 234, 298, 330, 394, 458, 490, 554,
+                           618],
+                'group2': [42, 106, 202, 266, 362, 426, 522, 586],
+            }
 
         elif self.mode.upper() == 'G':
             self.l0_samples = 320

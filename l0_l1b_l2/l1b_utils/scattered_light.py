@@ -74,7 +74,7 @@ target_sl_ratios = np.array(
      0.0153, 0.0127, 0.0166, 0.0099, 0.0123, 0.0097, 0.0113,
      0.0096, 0.0172, 0.0099, 0.0147, 0.0167, 0.0124, 0.0069,
      0.0105, 0.0079, 0.0079, 0.013, 0.0096, 0.0111, 0.0152,
-     4.2265])
+     .0152])
 
 
 def apply_scattered_light_corr(
@@ -122,13 +122,13 @@ def apply_scattered_light_corr(
         if ratios[band] > 0.0:
             sl_ratio = ratios[band]
             # modify in place atm, but maybe we want to make a copy?
-            obs_image[band, :, :] = basic_kernel_scattered_light_corr(
-                obs_band=obs_image[band, :, :],
+            obs_image[:, band, :] = basic_kernel_scattered_light_corr(
+                obs_band=obs_image[:, band, :],
                 sl_ratio=sl_ratio,
                 sigma=sigma,
             )
             # overall signal increase, not just for high areas
-            obs_image[band, :, :] *= (1 + sl_ratio)
+            obs_image[:, band, :] *= (1 + sl_ratio)
     return obs_image
 
 
