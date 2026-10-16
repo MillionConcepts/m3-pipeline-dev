@@ -44,7 +44,10 @@ def make_flag_backplane(
 
     # bit 1: interpolated pixel in BDE map
     # the bde map has shape bands, samples
-    bde_map = np.asarray(load_bde_map(Path(flag_path), extra_flag_path))
+    bde_map = np.asarray(load_bde_map(
+        flag_path=Path(flag_path),
+        additional_flag_path=extra_flag_path
+    ))
     flags |= _bit(bde_map > 0, BDE)[np.newaxis, :, :]
 
     # bit 2: variable column block
@@ -244,6 +247,7 @@ def make_dark_std_backplane(moonager: PipeManager):
     dark_std = bde_correction(
         obs_image=dark_std,
         bde_path=moonager.flag_path,
+        extra_bde_path=moonager.additional_flag_path
     )
     dark_std = detector_array_tap_interpolation(
         obs_image=dark_std,

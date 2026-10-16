@@ -153,8 +153,9 @@ def bde_correction(
     """
     from .loader import load_bde_map
 
-    bde_map = load_bde_map(bde_path, extra_bde_path)
-
+    bde_map = load_bde_map(flag_path=bde_path,
+                           additional_flag_path=extra_bde_path
+                           )
     check_shape(obs_image.shape, bde_map.shape)
 
     bad_mask = bde_map != 0

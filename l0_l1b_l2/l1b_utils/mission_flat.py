@@ -389,7 +389,10 @@ def make_flat_field_from_obs_with_masking(
 
     # load mask and un-mask readout cols and filter seam rows,
     # trim to L1B width
-    mask = load_bde_map(flag_path, extra_flag_path)
+    mask = load_bde_map(
+        flag_path=flag_path,
+        additional_flag_path=extra_flag_path
+    )
     mask = mask != 0
     if ignored_flag_cols is not None:
         mask[:, ignored_flag_cols] = False

@@ -27,7 +27,7 @@ def load_fits_into_frame(obs_path: Path) -> np.ndarray:
     if "ff" in filename or "flat" in filename:
         return image.astype(np.float32)
 
-    if "bde" in filename:
+    if "bde" in filename or "flag" in filename:
         return image.astype(np.uint8)
 
     if len(image.shape) > 2:
@@ -40,15 +40,11 @@ def load_fits_into_frame(obs_path: Path) -> np.ndarray:
 
 
 def load_bde_map(flag_path: Path,
-                 moonager: PipeManager = None,
                  additional_flag_path: Path = None,
                  ) -> np.ndarray:
     """
     Load the flag map as an int array, optionally adding a secondary flag map
     of the same shape.
-
-    If the BDE file is not available, we remake it using the dark signal
-    observation.
 
     Some flashing (likely ROIC noise) pixels are not flagged in warmer maps or
     are flagged on and off throughout the mission. Because these are frequently
@@ -56,28 +52,21 @@ def load_bde_map(flag_path: Path,
     precaution.
     """
     from l0_l1b_l2.reference import check_shape
-    from .mission_bde import build_bde_mask
 
     try:
         bde_map = load_fits_into_frame(flag_path)
     except Exception as e:
-        if moonager.verbose:
-            print(f"Making BDE map from dark signal observation because of "
-                  f"exception: {e}")
-        # it's unlikely one would get to this point with the dark observation
-        # not being present or not loading correctly
-        bde_map = build_bde_mask(
-            dark_path=moonager.dark_path,
-            obs_type=moonager.mode,
-            readout_cols=moonager.read_out_cols,
-            filter_seam_rows=moonager.filter_seam_rows
-        )
-
+        bde_map = None
+        print(f"Error loading BDE map: {e}. Using standard flag map only.")
     if additional_flag_path is not None:
+        print(f"Adding standard flag map for flagging.")
         extra_bde_map = load_fits_into_frame(additional_flag_path)
         # the values in the map itself are counts of bde maps with that flag,
         # so we just set everything to 1 where flagged
         extra_bde_map = (extra_bde_map > 0).astype(np.uint8)
+        if bde_map is None:
+            # use standard flag map only
+            return extra_bde_map
         check_shape(bde_map, extra_bde_map, "extra flag map loading")
         bde_map = bde_map + extra_bde_map
 

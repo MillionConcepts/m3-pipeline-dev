@@ -75,11 +75,13 @@ def flag_whole_cols(
     image_len = obs_band.shape[0]
     # percent of col that is flagged
     flag_ratios = (counts_per_col / 2) / image_len
-    if np.percentile(flag_ratios, 96) > flag_col_ratio:
-        print(
-            f"The cutoff flag ratio given for col flagging, {flag_col_ratio}, "
-            f"is lower than the 96th percentile pixels flagged per column, "
-            f"{np.percentile(flag_ratios, 96)} for band {band}.")
+    # TODO: this warning gets really annoying. maybe dump at the end as a list
+    #  of all cols that had the warning + their percentiles?
+    # if np.percentile(flag_ratios, 96) > flag_col_ratio:
+    #     print(
+    #         f"The cutoff flag ratio given for col flagging, {flag_col_ratio}, "
+    #         f"is lower than the 96th percentile pixels flagged per column, "
+    #         f"{np.percentile(flag_ratios, 96)} for band {band}.")
     cutoff = max(flag_col_ratio, np.percentile(flag_ratios, 96))
     return np.where(flag_ratios > cutoff)[0], flag_ratios
 
