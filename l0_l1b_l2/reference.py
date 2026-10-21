@@ -27,7 +27,8 @@ def pull_metadata(obs_id: str, cal_dir: Optional[str] = None) \
     """
     cal_dir = Path(CAL_DIR if cal_dir is None else cal_dir)
     info = pd.read_csv(cal_dir / OBS_INFO_FILE)
-    id_cols = ['obs_id', 'bde_id', 'flat_id', 'dark_id', 'closest_dark']
+    id_cols = ['obs_id', 'bde_id', 'flat_id', 'dark_id', 'closest_dark',
+               'replacement_dark_id']
 
     # should all be lowercase but make sure
     info[id_cols] = info[id_cols].apply(lambda col: col.str.lower())
@@ -87,14 +88,17 @@ def check_observation(obs_id: str, local_root: Optional[str] = None):
     # broken star tracker period
     if metadata['bad_dark']:
         obs_warn.append(f"This has been flagged as a bad dark obs, "
-                        f"{metadata['dark_id']}.")
+                        f"{metadata['dark_id']}. Replacing with "
+                        f"{metadata['replacement_dark_id']}.")
+        metadata['dark_id'] = metadata['replacement_dark_id']
     if metadata['bad_flat']:
         obs_warn.append(f"This has been flagged as a bad flat field obs, "
                         f"{metadata['flat_id']}.")
     if metadata['bad_bde']:
         obs_warn.append(f"This has been flagged as a bad BDE map, "
-                        f"{metadata['bde_id']}.")
-
+                        f"{metadata['bde_id']}. Replacing with "
+                        f"{metadata['replacement_dark_id']}.")
+        metadata['bde_id'] = metadata['replacement_dark_id']
     # if the dark used for L1B processing isn't the closest, warn the user
     if not metadata['dark_matches_closest']:
         obs_warn.append(f"The dark used for this obs, {metadata['dark_id']}, "
