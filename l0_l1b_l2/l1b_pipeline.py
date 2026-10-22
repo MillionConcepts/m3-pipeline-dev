@@ -505,7 +505,8 @@ def run_l1b_new_pipeline(moonager: PipeManager):
     shadow_surface = get_shadowing_from_lab_flat(
         flat_path=moonager.lab_flat_path,
         left_cutoff=moonager.left_col_cutoff,
-        right_cutoff=moonager.right_col_cutoff
+        right_cutoff=moonager.right_col_cutoff,
+        mode=moonager.mode,
     )
     obs_image[:, :, moonager.left_col_cutoff:moonager.right_col_cutoff] *=\
         shadow_surface[np.newaxis, :, :]

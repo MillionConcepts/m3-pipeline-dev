@@ -45,7 +45,8 @@ def apply_flat(
 def get_shadowing_from_lab_flat(
         flat_path: Path,
         left_cutoff: int,
-        right_cutoff: int
+        right_cutoff: int,
+        mode: str,
 ):
     """
     Get the shadowing from the lab flat, return as 2d surface.
@@ -62,6 +63,18 @@ def get_shadowing_from_lab_flat(
         sample_degree=3,
         n_iterations=2,
     )
+
+    # Keep left and right shadowing of both far sides (1 pixel for global mode,
+    # 2 pixels for target mode). This feature gets removed from
+    # surface fitting but doesn't seem related to other flat patterns that are
+    # more variable with obs ID / temperature. So we add it back to the flat
+    # surface here.
+    if mode == 'G':
+        include = 1
+    if mode == 'T':
+        include = 2
+    flat_surface[:, 0:include] = flat[:, left_cutoff:left_cutoff+include]
+    flat_surface[:, -include:] = flat[:, right_cutoff - include:right_cutoff]
 
     return flat_surface
 
