@@ -1,6 +1,5 @@
 from pathlib import Path
 import numpy as np
-from l0_l1b_l2.reference import PipeManager
 
 
 def load_fits_into_frame(obs_path: Path) -> np.ndarray:
@@ -51,7 +50,7 @@ def load_bde_map(flag_path: Path,
     bad in the observations, we can just add them to every flag map as a
     precaution.
     """
-    from l0_l1b_l2.reference import check_shape
+    from ..reference import check_shape
 
     try:
         bde_map = load_fits_into_frame(flag_path)
