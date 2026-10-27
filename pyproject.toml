@@ -1,0 +1,25 @@
+[project]
+name        = "m3_pipeline_tools"
+version     = "0.0.1"
+description = "Tools and pipelines for M3 processing."
+
+requires-python = ">=3.15"
+
+dependencies = [
+    "numpy",
+    "scipy",
+    "spiceypy",
+    "astropy",
+    "matplotlib",
+    "pandas",
+    "pyarrow",
+]
+
+[project.optional-dependencies]
+notebook = [
+    "notebook",
+]
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
