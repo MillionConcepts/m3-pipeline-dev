@@ -265,8 +265,8 @@ class PipeManager:
             self.vignetted_cols_right = [627, 628, 629, 630, 631,
                                          632, 633, 634, 635]
             # 608 samples after trimming cols
-            self.left_col_cutoff = 17  # inclusive
-            self.right_col_cutoff = 625  # exclusive
+            self.left_col_cutoff = 18  # inclusive
+            self.right_col_cutoff = 624  # exclusive
             # read out / tap cols are 1, 161, 321, 481 in DPSIS
             self.read_out_cols = [0, 160, 320, 480]
             # filter channels are 41, 42, 116 in DPSIS
