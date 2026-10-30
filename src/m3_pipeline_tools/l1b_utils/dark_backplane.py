@@ -19,6 +19,7 @@ def make_dark_std_backplane(moonager: PipeManager):
     varies by 10 DN during an obs, here is that same 10 DN in radiance units).
     """
     import numpy as np
+    from ..utils.loader import orient_and_trim_to_l1b
     from .dark_obs import make_dark_signal_image
     from .mission_bde import bde_correction, \
         detector_array_tap_interpolation
@@ -43,10 +44,15 @@ def make_dark_std_backplane(moonager: PipeManager):
 
     rdn_cal = load_rdn_cal(moonager.rdn_cal_path)
     dark_std = dark_std * rdn_cal[:, np.newaxis]
-    dark_std = dark_std[
-               np.max(moonager.omitted_channels) + 1:,
-               moonager.left_col_cutoff:moonager.right_col_cutoff
-               ]
+
+    dark_std = orient_and_trim_to_l1b(
+        input_array=dark_std,
+        left_col_cutoff=moonager.left_col_cutoff,
+        right_col_cutoff=moonager.right_col_cutoff,
+        reverse_samples=moonager.reverse_samples,
+        omitted_channels=moonager.omitted_channels,
+    )
+
     ssc_factors = load_ssc_factors_from_table(moonager.obs_id,
                                               moonager.ssc_table_path)
     dark_std = dark_std * ssc_factors[:, np.newaxis]

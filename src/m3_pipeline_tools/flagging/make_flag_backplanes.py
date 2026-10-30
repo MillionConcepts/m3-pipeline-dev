@@ -1,18 +1,19 @@
+"""Functions to combine various flags into backplanes."""
+
 import numpy as np
 from pathlib import Path
 
 # FLAGS FOR FLAG BACKPLANE
 NO_FLAG = 0
-L2_DEPRECATED = 1  # bands flagged by the mission in L2 as deprecated
-NAN = 2           # pixels set to NaN for being negative at L0 level (rollover)
-BDE = 4           # pixels spectrally interpolated because flagged in the BDE
-BAD_COL = 6       # pixels part of a column offset from its neighbors in value
+L2_DEPRECATED = 1  # bit 0, bands flagged by the mission in L2 as deprecated
+NAN = 2           # bit 1, pixels set to NaN for being negative at L0 level
+BDE = 4           # bit 2, pixels spectrally interpolated bc of the BDE
+BAD_COL = 8       # bit 3, pixels part of a column offset from its neighbors
 # FLAGS FOR FLICKER FLAGGING
-NO_FLICKER = 8  # bad-group column, no flicker on this line
-FLICKER_BUMP = 16  # flickers brighter than neighbors
-FLICKER_DROP = 32  # flickers darker than neighbors
-# FLAGS REMAINING: 64, 128
-
+NO_FLICKER = 16   # bit 4, bad-group column, no flicker on this line
+FLICKER_BUMP = 32 # bit 5, flickers brighter than neighbors
+FLICKER_DROP = 64 # bit 6, flickers darker than neighbors
+# FLAGS REMAINING:  128 / bit 7
 
 # Description mostly for writing to FITS header
 FLAG_DICT = [
@@ -34,13 +35,13 @@ def make_flag_backplane(
         flags: np.ndarray,
         obs_image: np.ndarray,
         flag_path: Path,
-        deprecated_channels: list[int] = None,
-        omitted_channels: list[int] = None,
-        extra_flag_path: Path = None,
+        deprecated_channels: list[int],
+        omitted_channels: list[int],
+        extra_flag_path: Path | None = None,
 ):
     """
     Combine all flags into backplane of L1B observation size. Meant to be run
-    as part of L0 to L1B processing, not afterwards.
+    as part of L0 to L1B processing, not afterward.
 
     See make_mission_l1b_flag_backplane for processing a pre-existing L1B obs.
 
@@ -61,14 +62,16 @@ def make_flag_backplane(
 
     n_lines, n_bands, n_samples = obs_image.shape
 
+    # Flicker map becomes the flag map. This is made earlier in the pipeline
+    # and currently is the same flags for all bands.
     if len(flags.shape) != 3:
         flags = np.repeat(flags[:, np.newaxis, :], n_bands, axis=1)
 
-    # bit 0: NaN in obs, set to NaN because of negative values in L0
+    # Flag NaN in obs, set to NaN because of negative values in L0
     # flags shape bands, lines, samples
     flags |= _bit(np.isnan(obs_image), NAN)
 
-    # bit 1: interpolated pixel in BDE map
+    # Flag interpolated pixels in BDE map
     # the bde map has shape bands, samples
     bde_map = np.asarray(load_bde_map(
         flag_path=Path(flag_path),
@@ -76,14 +79,14 @@ def make_flag_backplane(
     ))
     flags |= _bit(bde_map > 0, BDE)[np.newaxis, :, :]
 
-    # bit 3: bad columns (ie bad flat or missed bright / dark pixel)
+    # Flag bad columns (ie bad flat or missed bright / dark pixel)
     # bad cols shape band, samples
     bad_cols = np.asarray(build_bad_col_map(obs_image))
     flags |= _bit(bad_cols > 1, BAD_COL)[np.newaxis, :, :]
 
-    # bit 4: flag deprecated bands in l2 that were typically set to -999 by the
+    # Flag deprecated bands in l2 that were typically set to -999 by the
     # mission in l2. they look normal in l1b and l0.
-    if deprecated_channels is not None and len(deprecated_channels) > 0:
+    if len(deprecated_channels) > 0:
         # because flags is in L0 dimensions but the deprecated channels list
         # are in L1B dimensions, we have to add an offset so the indices are
         # correct
@@ -99,72 +102,92 @@ def flag_l1b(
         right_col_cutoff: int,
         reverse_lines: bool,
         reverse_samples: bool,
-        deprecated_channels: list[int] = None,
+        bad_col_groups: dict,
+        l1b_samples: int,
+        l1b_flicker_bands: slice,
+        deprecated_channels: list[int],
 ):
     """
     From L1B data, and optionally L0 data and mission BDE files, build an
-    L1B-shaped flag map with in the shape lines x bands x samples.
+    L1B-shaped flag map.
 
     dict paths keys: "l0_path", "l1b_path",  "flag_path"
     """
     from astropy.io import fits
-    from secondary_flagging import build_bad_col_map
-    from primary_flagging import get_l0_negative_flags
-    from ..utils.loader import load_fits_into_frame
+    from ..utils.loader import (load_fits_into_frame, load_bde_map,
+                                orient_and_trim_to_l1b)
+    from .primary_flagging import get_l0_negative_flags
+    from .secondary_flagging import build_bad_col_map
+    from .flicker_flagging import build_flicker_maps
+
 
     # If the L0 data are not present, we make flag map arr based
     # on L1B shape. We check here to avoid having L0 data and L1B data loaded
-    # at the same time later on. Otherwise, flags will get made when we check
-    # L0 for negative pixels.
+    # at the same time later on. Otherwise, the flags arr will get made when
+    # we check L0 for negative pixels next.
     if not paths['l0_path']:
         hdr = fits.getheader(paths['l1b_path'])
         flags = np.zeros(
-            (hdr['NAXIS3'], hdr['NAXIS2'], hdr['NAXIS1']),
+            (hdr['NAXIS2'], hdr['NAXIS3'], hdr['NAXIS1']),
             dtype=np.uint8,
         )
 
-    # bit 0: NaN in obs, set to NaN because of negative values in L0
+    # Flag NaN in obs, set to NaN because of negative values in L0
     if paths['l0_path']:
         # Must load L0, flag negative, and then trim and orient correctly
         flags = get_l0_negative_flags(l0_path=paths['l0_path'])
-        flags = flags[
-                :,
-                np.max(omitted_channels) + 1:,
-                left_col_cutoff:right_col_cutoff
-                ]
-        if reverse_lines:
-            flags = flags[::-1, :, :]
-        if reverse_samples:
-            flags = flags[:, :, ::-1]
         flags = _bit(flags == True, NAN)
+        flags = orient_and_trim_to_l1b(
+            input_array=flags,
+            left_col_cutoff=left_col_cutoff,
+            right_col_cutoff=right_col_cutoff,
+            reverse_samples=reverse_samples,
+            omitted_channels=omitted_channels
+        )
 
-    # bit 1: interpolated pixel in BDE map
+    # Flag interpolated pixel in BDE map
     if paths['flag_path']:
         # Need to load and trim / orient to L1B s
-        bde_map = np.asarray(load_fits_into_frame(paths['flag_path']))
-        bde_map = bde_map[
-                  np.max(omitted_channels) + 1:,
-                  left_col_cutoff:right_col_cutoff
-                  ]
-        if reverse_samples:
-            bde_map = bde_map[:, ::-1]
+        bde_map = load_bde_map(paths['flag_path'])
+        bde_map = orient_and_trim_to_l1b(
+            input_array=bde_map,
+            left_col_cutoff=left_col_cutoff,
+            right_col_cutoff=right_col_cutoff,
+            reverse_samples=reverse_samples,
+            omitted_channels=omitted_channels
+        )
         flags |= _bit(bde_map > 0, BDE)[np.newaxis, :, :]
 
     # flagging for the following bits requires the L1B data
     obs_image = load_fits_into_frame(paths['l1b_path'])
 
-    # bit 2: variable column block
-    # bad col group map shape lines, samples
-    # flags |= _bit(bad_col_group_map > 0, block_col)[:, np.newaxis, :]
+    # Flag flickering column blocks
+    flicker_map, _ = build_flicker_maps(
+        obs_image=obs_image,
+        bad_col_groups=bad_col_groups,
+        offset=False,
+        l1b_samples=l1b_samples,
+        bands=l1b_flicker_bands,
+        reverse_samples=reverse_samples,
+        left_col_cutoff=left_col_cutoff,
+    )
+    if len(flicker_map.shape) != 3:
+        flicker_map = np.repeat(
+            flicker_map[:, np.newaxis, :],
+            flags.shape[1],
+            axis=1,
+            )
+    flags |= flicker_map
+    del flicker_map
 
-    # bit 3: bad columns (ie bad flat or missed bright / dark pixel)
+    # Flag bad columns (ie bad flat or missed bright / dark pixel)
     # bad cols shape band, samples
     bad_cols = build_bad_col_map(obs_image)
     flags |= _bit(bad_cols > 1, BAD_COL)[np.newaxis, :, :]
 
-    # bit 4: flag deprecated bands in l2 that were typically set to -999
+    # Flag deprecated bands in l2 that were typically set to -999
     # by the mission in l2. they look normal in l1b and l0.
-    if deprecated_channels is not None and len(deprecated_channels) > 0:
+    if len(deprecated_channels) > 0:
         flags[:, deprecated_channels, :] |= L2_DEPRECATED
 
     # return in original view of l1b
@@ -214,14 +237,15 @@ def make_mission_l1b_flag_backplane(
             if name == "l1b_path":
                 print(f"{name} not found at {p}. Cannot run L1B flagging "
                       f"without the observation file. Bailing out.")
-                return
+                return None
             if moonager.verbose:
                 if name == "l0_path":
                     print(f"{name} not found: {p}. Without L0 data we cannot "
                           f"flag negative rollover values.")
                 if name == "flag_path":
                     # technically not true, we could use the dark, but then
-                    # it's not 100% necessarily true to the source material
+                    # it's not 100% necessarily true to the source material.
+                    # also the BDE file is smaller than the dark L0 files.
                     print(f"{name} not found: {p}. We cannot flag spectrally "
                           f"interpolated values.")
             # false if path doesn't exist
@@ -234,5 +258,8 @@ def make_mission_l1b_flag_backplane(
         right_col_cutoff=moonager.right_col_cutoff,
         reverse_lines=moonager.reverse_lines,
         reverse_samples=moonager.reverse_samples,
+        bad_col_groups=moonager.flicker_col_groups,
+        l1b_samples=moonager.l1b_samples,
+        l1b_flicker_bands=moonager.l1b_flicker_bands,
         deprecated_channels=moonager.degraded_channels,
     )

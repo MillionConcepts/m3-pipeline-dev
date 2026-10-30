@@ -177,13 +177,13 @@ def mask_neighborhood_diffs(
 def check_flicker_group(
         group_name: str,
         detection_band: np.ndarray,
-        cols: np.array,
-        normal_cols: np.array,
+        cols: np.ndarray,
+        normal_cols: np.ndarray,
         bad_bright: float,
         n_neighbors: int = 2,
         neighbor_stat: Literal["mean", "median"] = "median",
         window: int = 25,
-) -> dict:
+) -> pd.DataFrame:
     """
     Identify lines in the detection band where the given group of cols is
     flickering on or off. Also find the magnitude of the flicker. Flickering
@@ -298,7 +298,7 @@ def check_flicker_group(
     })
 
 
-def get_normal_cols(cols: np.array, n_cols: int):
+def get_normal_cols(cols: np.ndarray, n_cols: int):
     """
     Apply random-ish offset to col group indices to get a set of 'normal' cols
     for offset comparison. Like a control set of cols that we know don't
@@ -398,7 +398,7 @@ def make_flicker_map(
         n_lines: Lines in observation.
         n_cols: Samples in observation.
     """
-    from make_flag_backplanes import NO_FLICKER, FLICKER_DROP, FLICKER_BUMP
+    from .make_flag_backplanes import NO_FLICKER, FLICKER_DROP, FLICKER_BUMP
 
     flag_map = np.full((n_lines, n_cols), 0, dtype=np.uint8)
     # we flag even if there's no detected offset
@@ -437,14 +437,14 @@ def make_offset_map(
     return offset_map
 
 
-def get_flicker_maps(
+def build_flicker_maps(
         obs_image: np.ndarray,
         bad_col_groups: dict,
         offset: bool,
-        reverse_samples: bool,
-        left_col_cutoff: int,
+        bands: slice,
         l1b_samples: int,
-        bands: slice = slice(1, 3)
+        reverse_samples: bool = False,
+        left_col_cutoff: int = 0,
 ):
     """
     Identify flickering columns in L1B or L0 images and make a flag map from
@@ -460,10 +460,10 @@ def get_flicker_maps(
             on / off in the detector background.
         offset (bool): If true, output offset map as well that gives additive
             values to try and remove the flickering.
+        bands: Slice of band indices to use for making flicker flag maps.
+        l1b_samples: Samples in L1B.
         reverse_samples: Sample orientation in L1B.
         left_col_cutoff: Sample cutoff in L1B.
-        l1b_samples: Samples in L1B.
-        bands: Slice of band indices to use for making flicker flag maps.
     """
     n_lines, n_bands, n_cols = obs_image.shape
 

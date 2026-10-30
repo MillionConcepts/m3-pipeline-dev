@@ -4,13 +4,7 @@ from pathlib import Path
 import numpy as np
 
 
-def load_fits_into_frame(
-        obs_path: Path,
-        left_col_cutoff: int | None = None,
-        right_col_cutoff: int | None = None,
-        reverse_lines: bool | None = None,
-        reverse_samples: bool | None = None,
-) -> np.ndarray:
+def load_fits_into_frame(obs_path: Path) -> np.ndarray:
     """
     Load the obs data and return it in detector POV / frame view where
     axis 0 is frames / lines.
@@ -47,7 +41,7 @@ def load_fits_into_frame(
 
 
 def load_bde_map(flag_path: Path,
-                 extra_flag_path: Path = None,
+                 extra_flag_path: Path | None = None,
                  ) -> np.ndarray:
     """
     Load the flag map as an int array, optionally adding a secondary flag map
@@ -77,3 +71,34 @@ def load_bde_map(flag_path: Path,
         check_shape(bde_map, extra_bde_map, "extra flag map loading")
         bde_map = bde_map + extra_bde_map
     return bde_map
+
+
+def orient_and_trim_to_l1b(
+        input_array: np.ndarray,
+        left_col_cutoff: int,
+        right_col_cutoff: int,
+        reverse_lines: bool= False,
+        reverse_samples: bool = False,
+        omitted_channels: list[int] | None = None,
+):
+    if input_array.ndim == 2:
+        # bands x samples
+        input_array = input_array[:, left_col_cutoff:right_col_cutoff]
+        if reverse_samples:
+            input_array = input_array[:, ::-1]
+        if omitted_channels is not None:
+            input_array = input_array[np.max(omitted_channels) + 1:, :]
+        return input_array
+
+    if input_array.ndim == 3:
+        # lines x bands x samples
+        input_array = input_array[:, :, left_col_cutoff:right_col_cutoff]
+        if reverse_lines:
+            input_array = input_array[::-1, :, :]
+        if reverse_samples:
+            input_array = input_array[:, :, ::-1]
+        if omitted_channels is not None:
+            input_array = input_array[:, np.max(omitted_channels) + 1:, :]
+        return input_array
+
+    return input_array

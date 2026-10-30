@@ -269,7 +269,7 @@ class PipeManager:
                                          632, 633, 634, 635]
             # 608 samples after trimming cols
             self.left_col_cutoff = 18  # inclusive
-            self.right_col_cutoff = 624  # exclusive
+            self.right_col_cutoff = 626  # exclusive
             # read out / tap cols are 1, 161, 321, 481 in DPSIS
             self.read_out_cols = [0, 160, 320, 480]
             # filter channels are 41, 42, 116 in DPSIS
@@ -277,11 +277,14 @@ class PipeManager:
             # for L2
             self.degraded_channels = [0, 1, 2, 3, 4, 5, 6, 7, 255]
             # bad /variable column groups (1 indexed)
-            self.bad_column_groups = {
+            self.flicker_col_groups = {
                 'group1': np.array([74, 138, 170, 234, 298, 330, 394, 458, 490,
                                     554, 618]),
                 'group2': np.array([42, 106, 202, 266, 362, 426, 522, 586]),
             }
+            self.l0_flicker_bands = slice(6,8)
+            self.l1b_flicker_bands = slice(3,5)
+
 
         elif self.mode.upper() == 'G':
             self.l0_samples = 320
@@ -304,11 +307,13 @@ class PipeManager:
             # for L2
             self.degraded_channels = [0, 1]
             # bad /variable column groups (1 indexed)
-            self.bad_column_groups = {
+            self.flicker_col_groups = {
                 'group1': np.array([310, 278, 246, 230, 198, 166, 150, 118, 86,
                                     70, 38, 6]),
                 'group2': np.array([294, 262, 214, 182, 134, 102, 54, 22]),
             }
+            self.l0_flicker_bands = slice(2,3)
+            self.l1b_flicker_bands = slice(1,2)
 
         # L1B -> L2 related calibration files
         # some of these are both mode and time / date dependant

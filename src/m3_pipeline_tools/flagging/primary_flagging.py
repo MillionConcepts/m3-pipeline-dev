@@ -81,10 +81,7 @@ def build_bde_mask(
     return mask
 
 
-def call_build_bde_mask(
-        obs_id: str,
-        local_root: str = "data",
-):
+def call_build_bde_mask(obs_id: str, local_root: str = "data",):
     """
     Just a convenience function for testing only mission-based BDE mask
     building without running the whole pipeline.
@@ -106,9 +103,7 @@ def call_build_bde_mask(
                           )
 
 
-def get_l0_negative_flags(
-        l0_path: Path,
-):
+def get_l0_negative_flags(l0_path: Path):
     """
     Load L0, identify negative pixels, return obs as a bool array where
     True = negative in L1B shape and orientation.
