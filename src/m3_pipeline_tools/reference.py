@@ -1,10 +1,11 @@
 """ M3 processing context and metadata management. """
 
 from datetime import datetime
-import pandas as pd
 from pathlib import Path
 import re
 from typing import Optional
+import numpy as np
+import pandas as pd
 from . import CAL_DIR
 
 L1B_CAL_DIR = Path(CAL_DIR) / "l1b"
@@ -277,9 +278,9 @@ class PipeManager:
             self.degraded_channels = [0, 1, 2, 3, 4, 5, 6, 7, 255]
             # bad /variable column groups (1 indexed)
             self.bad_column_groups = {
-                'group1': [74, 138, 170, 234, 298, 330, 394, 458, 490, 554,
-                           618],
-                'group2': [42, 106, 202, 266, 362, 426, 522, 586],
+                'group1': np.array([74, 138, 170, 234, 298, 330, 394, 458, 490,
+                                    554, 618]),
+                'group2': np.array([42, 106, 202, 266, 362, 426, 522, 586]),
             }
 
         elif self.mode.upper() == 'G':
@@ -304,9 +305,9 @@ class PipeManager:
             self.degraded_channels = [0, 1]
             # bad /variable column groups (1 indexed)
             self.bad_column_groups = {
-                'group1': [310, 278, 246, 230, 198, 166, 150, 118, 86, 70, 38,
-                           6],
-                'group2': [294, 262, 214, 182, 134, 102, 54, 22],
+                'group1': np.array([310, 278, 246, 230, 198, 166, 150, 118, 86,
+                                    70, 38, 6]),
+                'group2': np.array([294, 262, 214, 182, 134, 102, 54, 22]),
             }
 
         # L1B -> L2 related calibration files

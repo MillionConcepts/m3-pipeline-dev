@@ -10,7 +10,7 @@ def neighbor_diff(
         side: Literal["left", "right"] = "left"
 ):
     """
-    Subtract neigboring columns for col-col offsets (good for flat evaluation
+    Subtract neighboring columns for col-col offsets (good for flat evaluation
     and flagging).
     """
     shift = 1 if side == "left" else -1
@@ -122,5 +122,3 @@ def build_bad_col_map(
             # below means default 2 for groups of 1 pixel as a result
             flag_map[band, group[np.nanargmax(ratios[group])]] = 2
     return flag_map
-
-

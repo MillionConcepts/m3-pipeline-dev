@@ -8,13 +8,6 @@ import warnings
 import numpy as np
 import pandas as pd
 
-# flags just for flicker flagging
-# TODO: set to flags for big flag map? instead of changing them later?
-FLAG_CLEAN = 0  # normal
-FLAG_NO_OFFSET = 1  # bad-group column, no flicker on this line
-FLAG_BUMP = 2  # flickers brighter than neighbors
-FLAG_DROP = 3  # flickers darker than neighbors
-
 
 def transform_bad_column_groups(
         bad_col_groups: dict,
@@ -26,6 +19,13 @@ def transform_bad_column_groups(
     Bad col groups are stored in the reference file / moonager in L0 indices
     and orientation. To check for bad cols in L1B files we have to transform
     them.
+
+    Args:
+        bad_col_groups: Arrays of hand-identified bad col indices that flash
+            on / off in the detector background.
+        reverse_samples: Sample orientation in L1B.
+        left_col_cutoff: Sample cutoff in L1B.
+        l1b_samples: Samples in L1B.
     """
     l1b_bad_col_groups = {}
     for key, idx in bad_col_groups.items():
@@ -106,7 +106,17 @@ def neighborhood_diff(
     secondary_flagging has a similar function called neighbor_diff, but that
     gets the difference for all cols in the array with only the closest col.
 
-    Returns array of shape: lines x num bad cols.
+    Args:
+        detection_band: Image of a band or mean of multiple bands for
+            flickering detection.
+        cols: Array of col indices.
+        n_neighbors: How many cols to either side of each 'bad' col to compare
+            it with.
+        neighbor_stat: Use mean or median to get neighborhood value of
+            n_neighbors. If n_neighbors == 1, mean == median.
+
+    Returns:
+         array of shape lines x num bad cols.
     """
     n_lines, n_cols = detection_band.shape
 
@@ -140,7 +150,9 @@ def mask_neighborhood_diffs(
         clip_k: float = 6.0
 ) -> tuple[np.ndarray, np.ndarray]:
     """
-    Mask diffs for scene noise and super bright stuff.
+    Mask diffs for scene noise and super bright stuff. Uses both the flickering
+    col diffs and the normal col diffs. Need the normal col diffs to set the
+    level at which to clip values.
     """
     from scipy import stats
 
@@ -164,14 +176,32 @@ def mask_neighborhood_diffs(
 
 def check_flicker_group(
         group_name: str,
-        cols: np.ndarray,
         detection_band: np.ndarray,
-        normal_cols: np.ndarray,
+        cols: np.array,
+        normal_cols: np.array,
         bad_bright: float,
         n_neighbors: int = 2,
         neighbor_stat: Literal["mean", "median"] = "median",
         window: int = 25,
 ) -> dict:
+    """
+    Identify lines in the detection band where the given group of cols is
+    flickering on or off. Also find the magnitude of the flicker. Flickering
+    is determined by comparison with a set of 'normal' cols at each line.
+
+    Args:
+        group_name: Name of col group being checked.
+        detection_band: Image of a band or mean of multiple bands for
+            flickering detection.
+        cols: Array of flickering col indices.
+        normal_cols: Array of col indices with no known flickering.
+        bad_bright: 99.5 percentile of detection band.
+        n_neighbors: How many cols to either side of each 'bad' col to compare
+            it with.
+        neighbor_stat: Use mean or median to get neighborhood value of
+            n_neighbors. If n_neighbors == 1, mean == median.
+        window: How many lines before and after each line to compare with.
+    """
     from scipy import stats
     from scipy.signal import find_peaks
 
@@ -268,11 +298,15 @@ def check_flicker_group(
     })
 
 
-def get_normal_cols(cols: np.ndarray, n_cols: int):
+def get_normal_cols(cols: np.array, n_cols: int):
     """
     Apply random-ish offset to col group indices to get a set of 'normal' cols
     for offset comparison. Like a control set of cols that we know don't
     show the same flickering pattern.
+
+    Args:
+        cols: Flickering col group.
+        n_cols: Offset, in pixels, to add to col group.
     """
     normal_cols = cols + 5
     # add check that we don't overlap another bad col group?
@@ -284,9 +318,8 @@ def get_normal_cols(cols: np.ndarray, n_cols: int):
 
 
 def find_background_flicker(
-        obs_image: np.ndarray,
+        detection_band: np.ndarray,
         col_groups: dict,
-        bands: slice,
 ) -> pd.DataFrame:
     """
     Identifies where groups of columns intermittently turn on and off in
@@ -314,11 +347,15 @@ def find_background_flicker(
         - Because we think it is part of the electronic background, this is an
           ADDITIVE effect, not multiplicative.
         - Sometimes it is (unfortunately) propagated to the flat field.
+
+    Args:
+        detection_band: Observation shape array, average of multiple bands or
+            just one.
+        col_groups: Dict of flickering bad col groups that have been
+            transformed to the shape / orientation of the detection band.
     """
 
-    _, _, n_cols = obs_image.shape  # changes with L0 or L1B input
-
-    detection_band = np.mean(obs_image[:, bands, :], axis=1)
+    _, n_cols = detection_band.shape  # changes with L0 or L1B input
 
     # ignore very bright parts of the image
     bad_bright = np.nanpercentile(detection_band, 99.5)
@@ -328,8 +365,8 @@ def find_background_flicker(
     segments = [
         check_flicker_group(
             group_name=group_name,
-            cols=cols,
             detection_band=detection_band,
+            cols=cols,
             normal_cols=get_normal_cols(cols, n_cols),
             bad_bright=bad_bright,
         )
@@ -340,10 +377,10 @@ def find_background_flicker(
 
 
 def make_flicker_map(
-        n_lines: int,
-        n_cols: int,
         segments: pd.DataFrame,
         col_groups: dict,
+        n_lines: int,
+        n_cols: int,
 ) -> np.ndarray:
     """
     Based on identified flickering, make a flag map.
@@ -354,22 +391,56 @@ def make_flicker_map(
     3 = drop
 
     All cols in a group get the same flag value for each line.
+
+    Args:
+        segments: Identified groups of flickering line segments
+        col_groups: Indices of bad cols in each group of flickering segments.
+        n_lines: Lines in observation.
+        n_cols: Samples in observation.
     """
-    flag_map = np.full((n_lines, n_cols), FLAG_CLEAN, dtype=np.uint8)
+    from make_flag_backplanes import NO_FLICKER, FLICKER_DROP, FLICKER_BUMP
+
+    flag_map = np.full((n_lines, n_cols), 0, dtype=np.uint8)
     # we flag even if there's no detected offset
     for cols in col_groups.values():
-        flag_map[:, cols] = FLAG_NO_OFFSET
+        flag_map[:, cols] = NO_FLICKER
     # for each flagged segment, indicate if bump or drop
     for seg in segments[segments.flagged].itertuples():
         rows = slice(seg.start_line, seg.end_line + 1)
         flag_map[rows, col_groups[seg.group]] = (
-            FLAG_BUMP if seg.flicker_mag > 0.0 else FLAG_DROP)
+            FLICKER_BUMP if seg.flicker_mag > 0.0 else FLICKER_DROP)
     return flag_map
 
 
-def get_flicker_map(
+def make_offset_map(
+        segments: pd.DataFrame,
+        col_groups: dict,
+        n_lines: int,
+        n_cols: int,
+) -> np.ndarray:
+    """
+    Based on identified flickering, make an offset map using median offset
+    per flickering group.
+
+    All cols in a group get the same value for each line within a flicker.
+
+    Args:
+        segments: Identified groups of flickering line segments
+        col_groups: Indices of bad cols in each group of flickering segments.
+        n_lines: Lines in observation.
+        n_cols: Samples in observation.
+    """
+    offset_map = np.full((n_lines, n_cols), 0, dtype=np.float32)
+    for seg in segments[segments.flagged].itertuples():
+        rows = slice(seg.start_line, seg.end_line + 1)
+        offset_map[rows, col_groups[seg.group]] = seg.flicker_mag
+    return offset_map
+
+
+def get_flicker_maps(
         obs_image: np.ndarray,
         bad_col_groups: dict,
+        offset: bool,
         reverse_samples: bool,
         left_col_cutoff: int,
         l1b_samples: int,
@@ -381,15 +452,25 @@ def get_flicker_map(
 
     If you wanted to get a map or offset values for every band, this would
     need to be run per band.
-    """
 
+    Args:
+        obs_image: Observation data in lines x bands x samples/cols. Can be
+            L1B or L0 shape.
+        bad_col_groups: Arrays of hand-identified bad col indices that flash
+            on / off in the detector background.
+        offset (bool): If true, output offset map as well that gives additive
+            values to try and remove the flickering.
+        reverse_samples: Sample orientation in L1B.
+        left_col_cutoff: Sample cutoff in L1B.
+        l1b_samples: Samples in L1B.
+        bands: Slice of band indices to use for making flicker flag maps.
+    """
     n_lines, n_bands, n_cols = obs_image.shape
 
-    # TODO: moonager stores cols as lists, convert to arrays and then do it in
-    #   moonager after the old bad col group code is fully replaced.
-    bad_col_groups = {k: np.asarray(v) for k, v in bad_col_groups.items()}
+    detection_band = np.mean(obs_image[:, bands, :], axis=1)
 
-    # check if it's l1b based on shape for now
+    # check if it's l1b based on shape for now, change bad col groups to l1b
+    # size and orientation if true
     if n_cols == l1b_samples:
         bad_col_groups = transform_bad_column_groups(
             bad_col_groups=bad_col_groups,
@@ -400,17 +481,28 @@ def get_flicker_map(
 
     # ID flickering in given groups using a set of bands
     segments = find_background_flicker(
-        obs_image=obs_image,
+        detection_band=detection_band,
         col_groups=bad_col_groups,
-        bands=bands,
     )
 
     # make flicker map
     flicker_map = make_flicker_map(
-        n_lines=n_lines,
-        n_cols=n_cols,
         segments=segments,
         col_groups=bad_col_groups,
+        n_lines=n_lines,
+        n_cols=n_cols,
     )
 
-    return flicker_map
+    # optionally make additive offset map for adding to image
+    # probably not a good idea to use for l1b UNLESS running per band, and
+    # even then questionable
+    if offset:
+        offset_map = make_offset_map(
+            segments=segments,
+            col_groups=bad_col_groups,
+            n_lines=n_lines,
+            n_cols=n_cols,
+        )
+        return flicker_map, offset_map
+
+    return flicker_map, None

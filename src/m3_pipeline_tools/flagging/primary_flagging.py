@@ -117,4 +117,3 @@ def get_l0_negative_flags(
 
     l0 = load_fits_into_frame(l0_path)
     return l0 < 0
-

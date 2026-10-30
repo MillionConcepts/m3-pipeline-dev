@@ -4,7 +4,13 @@ from pathlib import Path
 import numpy as np
 
 
-def load_fits_into_frame(obs_path: Path) -> np.ndarray:
+def load_fits_into_frame(
+        obs_path: Path,
+        left_col_cutoff: int | None = None,
+        right_col_cutoff: int | None = None,
+        reverse_lines: bool | None = None,
+        reverse_samples: bool | None = None,
+) -> np.ndarray:
     """
     Load the obs data and return it in detector POV / frame view where
     axis 0 is frames / lines.
