@@ -1,3 +1,5 @@
+""" Loading functions for observational data and some calibration files."""
+
 from pathlib import Path
 import numpy as np
 
@@ -39,7 +41,7 @@ def load_fits_into_frame(obs_path: Path) -> np.ndarray:
 
 
 def load_bde_map(flag_path: Path,
-                 additional_flag_path: Path = None,
+                 extra_flag_path: Path = None,
                  ) -> np.ndarray:
     """
     Load the flag map as an int array, optionally adding a secondary flag map
@@ -56,10 +58,10 @@ def load_bde_map(flag_path: Path,
         bde_map = load_fits_into_frame(flag_path)
     except Exception as e:
         bde_map = None
-        print(f"Error loading BDE map: {e}. Using standard flag map only.")
-    if additional_flag_path is not None:
+        print(f"Error loading observation-level BDE map: {e}.")
+    if extra_flag_path is not None:
         print(f"Adding standard flag map for flagging.")
-        extra_bde_map = load_fits_into_frame(additional_flag_path)
+        extra_bde_map = load_fits_into_frame(extra_flag_path)
         # the values in the map itself are counts of bde maps with that flag,
         # so we just set everything to 1 where flagged
         extra_bde_map = (extra_bde_map > 0).astype(np.uint8)
@@ -68,5 +70,4 @@ def load_bde_map(flag_path: Path,
             return extra_bde_map
         check_shape(bde_map, extra_bde_map, "extra flag map loading")
         bde_map = bde_map + extra_bde_map
-
     return bde_map

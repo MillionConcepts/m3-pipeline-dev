@@ -17,12 +17,12 @@ def detector_array_tap_interpolation(obs_image: np.ndarray, cols: list):
     if obs_image.ndim == 3:
         n_frames = obs_image.shape[0]
         for frame_idx in range(n_frames):
-            obs_image[frame_idx, :, cols] = (obs_image[frame_idx, :, cols - 1] +
-                                            obs_image[frame_idx, :,
-                                            cols + 1]) / 2.0
+            obs_image[frame_idx, :, cols] = (obs_image[frame_idx, :, cols - 1]
+                                             + obs_image[frame_idx, :,
+                                               cols + 1]) / 2.0
     else:
         obs_image[:, cols] = (obs_image[:, cols - 1] +
-                             obs_image[:, cols + 1]) / 2.0
+                              obs_image[:, cols + 1]) / 2.0
     return obs_image
 
 
@@ -48,45 +48,49 @@ def filter_seam_interpolation(obs_image: np.ndarray, channels: list):
             if is_3d:
                 for frame_idx in range(n_frames):
                     obs_image[frame_idx, channel, :] = (2 / 3) * obs_image[
-                                                                frame_idx,
-                                                                channel - 1,
-                                                                :] + \
-                                                      (1 / 3) * obs_image[
-                                                                frame_idx,
-                                                                channel + 2, :]
+                                                                 frame_idx,
+                                                                 channel - 1,
+                                                                 :] + \
+                                                       (1 / 3) * obs_image[
+                                                                 frame_idx,
+                                                                 channel + 2,
+                                                                 :]
             else:
                 obs_image[channel, :] = (1 / 3) * obs_image[channel - 1, :] + \
-                                       (2 / 3) * obs_image[channel + 2, :]
+                                        (2 / 3) * obs_image[channel + 2, :]
         elif channel in [42]:
             if is_3d:
                 for frame_idx in range(n_frames):
                     obs_image[frame_idx, channel, :] = (1 / 3) * obs_image[
-                                                                frame_idx,
-                                                                channel - 2,
-                                                                :] + \
-                                                      (2 / 3) * obs_image[
-                                                                frame_idx,
-                                                                channel + 1, :]
+                                                                 frame_idx,
+                                                                 channel - 2,
+                                                                 :] + \
+                                                       (2 / 3) * obs_image[
+                                                                 frame_idx,
+                                                                 channel + 1,
+                                                                 :]
             else:
                 obs_image[channel, :] = (1 / 3) * obs_image[channel - 2, :] + \
-                                       (2 / 3) * obs_image[channel + 1, :]
+                                        (2 / 3) * obs_image[channel + 1, :]
         else:
             if is_3d:
                 for frame_idx in range(n_frames):
                     obs_image[frame_idx, channel, :] = (obs_image[frame_idx,
-                                                       channel - 1, :] +
-                                                       obs_image[frame_idx,
-                                                       channel + 1, :]) / 2.0
+                                                        channel - 1, :] +
+                                                        obs_image[frame_idx,
+                                                        channel + 1, :]) / 2.0
             else:
                 obs_image[:, channel, :] = (obs_image[:, channel - 1, :] +
-                                           obs_image[:, channel + 1, :]) / 2.0
+                                            obs_image[:, channel + 1, :]) / 2.0
     return obs_image
 
 
-# this bde correction is cleaner looking but much slower than the one below it.
-# it's memory usage is also relatively low though. I think a vectorized version
-# would have more significant memory usage on large observations. This version
-# would also be slower on target with more columns to loop over.
+"""
+this bde correction is cleaner looking but much slower than the one below it.
+its memory usage is also relatively low though. I think a vectorized version
+would have more significant memory usage on large observations. This version
+would also be slower on target with more columns to loop over.
+"""
 # def bde_correction(obs_image: np.ndarray, bde_path: Path):
 #     """
 #     Elements are flagged 0-5 in these fits files. Values 1-4 seem to indicate
@@ -98,11 +102,12 @@ def filter_seam_interpolation(obs_image: np.ndarray, channels: list):
 #
 #     Pixels with only one "good" pixel above or below it (this means they are
 #     likely near the edge) will adopt that good pixel's value. If there are NO
-#     good pixels in a column, right now we don't do anything. This could change,
-#     but should only matter for the tap columns we interpolate across in the
-#     spatial direction in a later step.
+#     good pixels in a column, right now we don't do anything. This could
+#     change, but should only matter for the tap columns we interpolate across
+#     in the spatial direction in a later step.
 #
-#     Supports 3D arrays (frames, channels, cols) and 2D arrays (channels, cols).
+#     Supports 3D arrays (frames, channels, cols) and 2D arrays
+#     (channels, cols).
 #     """
 #     from .loader import load_fits_into_frame
 #
@@ -133,7 +138,9 @@ def bde_correction(
         ignore_cols: Optional[list[int]] = None,
 ):
     """
-    Elements are flagged 0-5 in these fits files. Values 1-4 seem to indicate
+    Interpolate flagged samples linearly in the spectral direction.
+
+    Elements are flagged 0-5 in the BDE fits files. Values 1-4 seem to indicate
     things that are "flagged", 1 being the lowest level and 4 the highest. I
     think the mission interpolated everything flagged 1-4 in the spectral
     direction. This does seem a little problematic to me because the filter
@@ -151,7 +158,7 @@ def bde_correction(
 
     Optionally ignore some bands / cols.
     """
-    from .loader import load_bde_map
+    from ..utils.loader import load_bde_map
 
     bde_map = load_bde_map(flag_path=bde_path,
                            additional_flag_path=extra_bde_path
@@ -259,109 +266,3 @@ def bde_correction(
             obs_image[br, bc] = obs_image[btr, bc]
 
     return obs_image
-
-
-def build_bde_mask(
-        dark_path: Path,
-        obs_type,
-        readout_cols: list,
-        filter_seam_rows: list
-):
-    """
-    Make a BDE mask for a target or global observation. Thresholds named below
-    are deduced from calculating the mean and std for the L0 dark and comparing
-    to their mission-produced BDE file. The order in which flags were assigned
-    is unknown, and there are unexplained apparent differences in flag meanings
-    for observation type (ie target vs global).
-
-    It was also discovered there is one pixel in the global flat that is always
-    flagged as flag 1. There could be more like this, but I haven't found them
-    yet.
-
-    Global
-    0: < 2.2 DN std, < 1000 DN mean
-    1: < 2.2 DN std, > 1000 DN mean
-    2: > 2.2 DN std, < 1000 DN mean
-    3: > 2.2 DN std, > 1000 DN mean
-    4:  Filter seams
-
-    Target
-    0: < 5.0 DN std, 1000 > x > 300 DN mean
-    1: < 5.0 DN std, > 1000 DN mean (could just be mean?)
-    2: < 5.0 DN std, < 300 DN mean
-    3: > 5.0 DN std, x < 1000 DN mean
-    4:  Filter seams, > 5.0 DN std, > 1000 DN mean
-    """
-    from .loader import load_fits_into_frame
-
-    # could do the following with make_dark_signal_image but would need
-    # to decide how to treat negative values for all other dark signal uses
-    # (although most of those were never processed to L1B bc they were
-    # very hot)
-
-    # crop beginning and end of loaded dark
-    dark = load_fits_into_frame(dark_path)[1: -1, :, :]
-    # remove -2 rollover values bc they mess with the stats
-    dark[dark < 0.0] = np.nan
-
-    # DPSIS says they used mean not median
-    mean = np.nanmean(dark, axis=0)
-    std = np.nanstd(dark, axis=0)
-    has_nan = np.any(np.isnan(dark), axis=0)
-
-    # has to be float type bc for whatever reason negative values are flag 1.5
-    mask = np.zeros(mean.shape, dtype=float)
-
-    if obs_type == "G":
-        mask[(std < 2.2) & (mean < 1000)] = 0
-        mask[(std < 2.2) & (mean > 1000)] = 1
-        mask[(std >= 2.2) & (mean < 1000)] = 2
-        mask[(std >= 2.2) & (mean >= 1000)] = 3
-
-        # special case from looking at their masks + flat field
-        mask[11, 256] = 1
-    elif obs_type == "T":
-        mask[(std < 5.0) & (mean > 300) & (mean < 1000)] = 0
-        mask[(std < 5.0) & (mean > 1000)] = 1
-        mask[(std < 5.0) & (mean < 300)] = 2
-        mask[(std >= 5.0) & (mean < 1000)] = 3
-        mask[(std >= 5.0) & (mean >= 1000)] = 4
-
-    if readout_cols is not None:
-        mask[:, readout_cols] = 1
-
-    if filter_seam_rows is not None:
-        mask[filter_seam_rows, :] = 4
-
-    mask[has_nan] = 1.5
-
-    return mask
-
-
-def call_build_bde_mask(
-        obs_id: str,
-        local_root: str = "data",
-):
-    """
-    Just a convenience function for testing only mission-based BDE mask
-    building without running the whole pipeline.
-    """
-    from ..reference import PipeManager, check_observation
-
-    obs_warn, obs_error, metadata = check_observation(obs_id)
-
-    moonager = PipeManager(
-        obs_id=obs_id,
-        metadata=metadata,
-        local_root=local_root,
-        save_steps=False,
-        backplanes=False,
-        verbose=True,
-    )
-    print(f"dark: {moonager.dark_path}")
-    return build_bde_mask(moonager.dark_path,
-                          moonager.mode,
-                          moonager.read_out_cols,
-                          moonager.filter_seam_rows,
-                          )
-

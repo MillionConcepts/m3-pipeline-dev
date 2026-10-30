@@ -11,7 +11,7 @@ def run_l2_mission_pipeline(moonager: PipeManager):
     point) use these products from our version of the L1B pipeline, or use the
     L1B products stored by the USGS PDS node (fits files).
     """
-    from .l1b_utils.loader import load_fits_into_frame
+    from src.m3_pipeline_tools.utils.loader import load_fits_into_frame
     from .l2_utils.radiance_factor import calculate_radiance_factor
     from .l2_utils.statistical_polishing import apply_stat_polishing
     from .l2_utils.photometric_corr import photometric_correction

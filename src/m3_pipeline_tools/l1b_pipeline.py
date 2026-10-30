@@ -11,7 +11,7 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
     If moonager.backplanes = True, returns the obs image and the dark std
     processed to radiance. Else, just returns the obs in radiance.
     """
-    from .l1b_utils.loader import load_fits_into_frame
+    from src.m3_pipeline_tools.utils.loader import load_fits_into_frame
     from .l1b_utils.dark_obs import make_dark_signal_image, \
         basic_dark_pedestal_correction
     from .l1b_utils.electronic_ghost import ghost_correction
@@ -21,9 +21,9 @@ def run_l1b_mission_pipeline(moonager: PipeManager):
     from .l1b_utils.smooth_shape import apply_ssc_factors
     from .l1b_utils.radiometric_calibration import apply_rdn_cal
     from .l1b_utils.scattered_light import apply_scattered_light_corr
-    from .l1b_utils.make_backplanes import make_dark_std_backplane, \
+    from src.m3_pipeline_tools.flagging.make_flag_backplanes import make_dark_std_backplane, \
         make_flag_backplane
-    from .l1b_utils.new_flat import fix_variable_columns
+    from retired.new_flat import fix_variable_columns
 
     # standard obs_image shape for this software will be axis 0 = lines aka
     # frames aka temporal direction, so:
@@ -257,7 +257,7 @@ def run_basic_cleanup_l0(moonager: PipeManager):
     seam interpolation, ghosts, and DSS). No pedestal, scattered light,
     rad cal or smooth shape. Result is in DN.
     """
-    from .l1b_utils.loader import load_fits_into_frame
+    from src.m3_pipeline_tools.utils.loader import load_fits_into_frame
     from .l1b_utils.dark_obs import make_dark_signal_image
     from .l1b_utils.electronic_ghost import ghost_correction
     from .l1b_utils.mission_bde import bde_correction, \
@@ -352,7 +352,7 @@ def run_l1b_new_pipeline(moonager: PipeManager):
     """
     DPSIS with creative liberties.
     """
-    from .l1b_utils.loader import load_fits_into_frame
+    from src.m3_pipeline_tools.utils.loader import load_fits_into_frame
     from .l1b_utils.dark_obs import make_dark_signal_image, \
         per_band_dark_pedestal_correction
     from .l1b_utils.electronic_ghost import ghost_correction
@@ -363,9 +363,9 @@ def run_l1b_new_pipeline(moonager: PipeManager):
     from .l1b_utils.radiometric_calibration import apply_rdn_cal
     from .l1b_utils.smooth_shape import apply_ssc_factors
     from .l1b_utils.scattered_light import apply_scattered_light_corr
-    from .l1b_utils.make_backplanes import make_dark_std_backplane, \
+    from src.m3_pipeline_tools.flagging.make_flag_backplanes import make_dark_std_backplane, \
         make_flag_backplane
-    from .l1b_utils.new_flat import fix_variable_columns
+    from retired.new_flat import fix_variable_columns
 
     # standard obs_image shape for this software will be axis 0 = lines aka
     # frames aka temporal direction, so:

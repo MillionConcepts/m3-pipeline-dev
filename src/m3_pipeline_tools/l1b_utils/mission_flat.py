@@ -5,16 +5,6 @@ from typing import Optional
 from ..reference import check_shape
 
 
-def load_flats(flat_path: Path):
-    """
-    Read in flat files.
-    """
-    with fits.open(flat_path) as hdul:
-        flat = hdul[0].data
-
-    return flat
-
-
 def apply_flat(
         obs_image: np.ndarray,
         flat_path: Path,
@@ -24,8 +14,10 @@ def apply_flat(
     Load and multiply or divide flat by image. Modify flat for flagged elements
     in the BDE if flag_path is given.
     """
+    from ..utils.loader import load_fits_into_frame
+
     if flag_path is None:
-        flat = load_flats(flat_path)
+        flat = load_fits_into_frame(flat_path)
     else:
         flat = fix_flagged_in_lab_flat(
             flat_path,
@@ -55,7 +47,8 @@ def get_shadowing_from_lab_flat(
     That way we don't accidentally keep the shadowing in the flat
     in an effort to remove observational illumination/shadowing.
     """
-    flat = load_flats(flat_path)
+    from ..utils.loader import load_fits_into_frame
+    flat = load_fits_into_frame(flat_path)
 
     flat_surface = fit_surface(
         flat[:, left_cutoff:right_cutoff],
@@ -91,8 +84,9 @@ def fix_flagged_in_lab_flat(flat_path: Path, bde_path: Path):
     think they modified in this way.
     """
     from .mission_bde import bde_correction
+    from ..utils.loader import load_fits_into_frame
 
-    flat = load_flats(flat_path)
+    flat = load_fits_into_frame(flat_path)
 
     mod_flat = bde_correction(flat, bde_path)
 
@@ -207,7 +201,8 @@ def make_flat_field_from_paths(paths, n_center=40) -> np.ndarray:
     flat = normalize_to_center(line_average, n_center)
 
     # 2) 2d surface removal
-    flat = flat / fit_surface(flat)
+    surface = fit_surface(flat)
+    flat = flat / surface
 
     # 3) divide out spectral average
     flat = flat / np.nanmedian(flat, axis=0, keepdims=True)
@@ -391,21 +386,22 @@ def make_flat_field_from_obs_with_masking(
     it is more fitting to just treat like a normal band since the whole thing
     is interpolated.
     """
-    from .loader import load_bde_map
+    from ..utils.loader import load_bde_map
 
     # 1) average data & normalize
     # obs image has shape band, line, sample
-    line_average = np.nanmedian(
+    # line_average = np.nanmedian(
+    #     obs_image[:, :, left_col_cutoff:right_col_cutoff],
+    #     axis=0
+    # )
+    line_average = np.nanmean(
         obs_image[:, :, left_col_cutoff:right_col_cutoff],
         axis=0
     )
 
     # load mask and un-mask readout cols and filter seam rows,
     # trim to L1B width
-    mask = load_bde_map(
-        flag_path=flag_path,
-        additional_flag_path=extra_flag_path
-    )
+    mask = load_bde_map(flag_path=flag_path, extra_flag_path=extra_flag_path)
     mask = mask != 0
     if ignored_flag_cols is not None:
         mask[:, ignored_flag_cols] = False
@@ -422,7 +418,8 @@ def make_flat_field_from_obs_with_masking(
     flat = normalize_to_center(flat, n_center)
 
     # 2) 2d surface removal
-    flat = flat / fit_surface(flat)
+    surface = fit_surface(flat)
+    flat = flat / surface
 
     # 3) divide out spectral average.
     # average from across the whole flat or the middle?

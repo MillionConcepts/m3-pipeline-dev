@@ -24,7 +24,7 @@ def make_dark_signal_image(
         and med are both good for dark signal subtraction, std and max for
         detecting bad detector elements.
     """
-    from .loader import load_fits_into_frame
+    from src.m3_pipeline_tools.utils.loader import load_fits_into_frame
 
     dark_obs_data = load_fits_into_frame(dark_path)
     # check everything looks normal (it should)
@@ -255,7 +255,7 @@ def experimental_dark_pedestal_correction(
         image for DSS.
         dark_cols: Columns used for estimating dark signal.
     """
-    from .loader import load_fits_into_frame
+    from src.m3_pipeline_tools.utils.loader import load_fits_into_frame
     from .mission_bde import bde_correction, \
         detector_array_tap_interpolation
     if dark_cols is None:

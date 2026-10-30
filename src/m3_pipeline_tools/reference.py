@@ -1,3 +1,5 @@
+""" M3 processing context and metadata management. """
+
 from datetime import datetime
 import pandas as pd
 from pathlib import Path

@@ -1,14 +1,7 @@
+""" Functions for flagging bad columns in L0 or L1B data."""
+
 import numpy as np
-# import warnings
-# from scipy import signal
-# from scipy.ndimage import label
 from typing import Literal
-from pathlib import Path
-
-
-# flag bad columns that span the whole observation
-# this is a very simple heuristic: is the majority of this column
-# (>60% of pixels) offset by more than median diffs + .5 std of image diffs
 
 
 def neighbor_diff(
@@ -68,6 +61,8 @@ def flag_whole_cols(
     minimum percentage of the column (60-70% is a good setting I think). 'Bad'
     means offset from the left and right columns by more than the median plus a
     specified sigma.
+
+    (>60% of pixels) offset by more than median diffs + .5 std of image diffs
     """
     combo_flags = combo_side_flags(obs_band, sigma)
     counts_per_col = combo_flags.sum(axis=0)
@@ -78,7 +73,8 @@ def flag_whole_cols(
     #  of all cols that had the warning + their percentiles?
     # if np.percentile(flag_ratios, 96) > flag_col_ratio:
     #     print(
-    #         f"The cutoff flag ratio given for col flagging, {flag_col_ratio}, "
+    #         f"The cutoff flag ratio given for col flagging,
+    #         {flag_col_ratio}, "
     #         f"is lower than the 96th percentile pixels flagged per column, "
     #         f"{np.percentile(flag_ratios, 96)} for band {band}.")
     cutoff = max(flag_col_ratio, np.percentile(flag_ratios, 96))
@@ -127,16 +123,4 @@ def build_bad_col_map(
             flag_map[band, group[np.nanargmax(ratios[group])]] = 2
     return flag_map
 
-
-def get_l0_negative_flags(
-        l0_path: Path,
-):
-    """
-    Load L0, identify negative pixels, return obs as a bool array where
-    True = negative in L1B shape and orientation.
-    """
-    from .loader import load_fits_into_frame
-
-    l0 = load_fits_into_frame(l0_path)
-    return l0 < 0
 

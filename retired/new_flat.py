@@ -433,6 +433,22 @@ def fix_variable_columns(obs_image: np.ndarray, col_groups: dict):
         col_groups
     )
 
+    # second band to prevent super high signal at higher bands washing them
+    # out
+    # block_results = find_variable_column_blocks(
+    #     obs_band_combo=obs_image[1, :, :].copy(),
+    #     col_groups=col_groups,
+    #     comp_window=1,
+    #     min_offset=1.0,
+    #     max_offset=10.0,
+    #     min_cols_frac=0.3,
+    #     offset_type="auto",
+    #     max_gap=10,
+    #     min_block_size=15,
+    #     end_threshold=1.0,
+    #     end_window=2,
+    # )
+
     # make a map (applies to all bands) to add to flag map later
     # could use this in lieu of block dict, but then we wouldn't retain col
     # stats

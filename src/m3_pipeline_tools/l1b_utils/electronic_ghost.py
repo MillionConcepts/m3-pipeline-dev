@@ -32,6 +32,7 @@ def ghost_correction(
     of 'bad' elements, so right now the ghosts of those are not accounted
     for. It is not even clear to me if they occur?
     """
+
     if dark_cols is None:
         dark_cols = []
 
